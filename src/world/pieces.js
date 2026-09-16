@@ -11,6 +11,7 @@
  */
 import * as THREE from 'three'
 import PIECES from './pieces-lib.js'
+import BRAIN_PIECES from './brain-pieces-lib.js'
 
 export const PIECE_SCALE = 1.7
 
@@ -37,6 +38,10 @@ export const PALETTES = {
   social: { STONE: '#dcd0bc', ROOF: '#c96a3c' },
   environmental: { STONE: '#c9c3ae', ROOF: '#4f5a5a', LEAF: '#5aa848' },
   grounds: {},
+  /** The JARVIS Brain's own palette, for the pieces borrowed from it. */
+  brain: { STONE: '#b9b1a3', STONE_DARK: '#6f685d', ACCENT: '#d9b45c', ACCENT2: '#7c5cfc', GLOW: '#ffd27a', ROOF: '#6f685d', LEAF: '#4f9a3f' },
+  space: { METAL: '#c9ced4', METAL_DARK: '#3a3f47', STONE: '#9a9a9a', STONE_DARK: '#5c5c5c', LIGHT: '#f5f5f5', ACCENT: '#e0a030', ACCENT2: '#5ec8ff', GLOW: '#ffd27a', GLASS: '#7fb6e6', BLACK: '#101216' },
+  medieval: { STONE: '#c9bda6', STONE_DARK: '#7c6f5a', WOOD: '#7d4f28', METAL: '#8e949b', METAL_DARK: '#454a52', CLOTH: '#e9dcc0', GLASS: '#7fa6c9', ACCENT: '#b8321e', ACCENT2: '#c9a227', GLOW: '#ffc86b', EARTH: '#6f5a3c' },
 }
 
 export function paletteFor(district, overrides) {
@@ -47,7 +52,7 @@ let _fns = null
 function pieces() {
   if (_fns) return _fns
   try {
-    _fns = PIECES(THREE, CELL) || {}
+    _fns = Object.assign({}, BRAIN_PIECES(THREE, CELL) || {}, PIECES(THREE, CELL) || {})
   } catch (e) {
     console.warn('[pieces] lib failed', e)
     _fns = {}

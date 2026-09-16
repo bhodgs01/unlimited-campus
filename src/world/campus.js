@@ -226,8 +226,9 @@ function ribbon(points, halfW, color, y) {
     const len = Math.hypot(dx, dz) || 1
     const nx = -dz / len
     const nz = dx / len
-    left.push([points[i].x + nx * halfW, points[i].z + nz * halfW])
-    right.push([points[i].x - nx * halfW, points[i].z - nz * halfW])
+    // shape y becomes -z after rotateX(-90deg), so store -z here
+    left.push([points[i].x + nx * halfW, -(points[i].z + nz * halfW)])
+    right.push([points[i].x - nx * halfW, -(points[i].z - nz * halfW)])
   }
   const shape = new THREE.Shape()
   shape.moveTo(left[0][0], left[0][1])
@@ -358,6 +359,7 @@ export function buildCampus(scene, { shadows = true, detail = 'medium' } = {}) {
       const p = rimPoint(t, inset)
       // keep the belt off the campus grid itself
       if (Math.abs(p.x) < EXTENT.x + 6 && Math.abs(p.z) < EXTENT.z + 6) continue
+      if (Math.abs(p.x) < 150 && p.z < -100 && p.z > -142) continue // the schools row
       const kind = rand() < 0.55 ? 'campustree' : rand() < 0.6 ? 'campustreetall' : 'campustreeflat'
       stamp(kind, p.x, p.z, rand() * P * 2, 0.85 + rand() * 0.5)
     }
@@ -712,7 +714,7 @@ export function buildCampus(scene, { shadows = true, detail = 'medium' } = {}) {
       return (x / (ISLAND.rx * k)) ** 2 + (z / (ISLAND.rz * k)) ** 2 < 1
     }
     const pitchRects = [[-150, 27], [150, 30], [150, 78]].map(([x, z]) => ({ x, z, w: 22, d: 16 }))
-    const flatRects = [{ x: 0, z: 66.5, w: 23, d: 13 }, { x: 0, z: 84, w: 40, d: 26 }] // market + gardens
+    const flatRects = [{ x: 0, z: 66.5, w: 23, d: 13 }, { x: 0, z: 84, w: 40, d: 26 }, { x: 0, z: -121, w: 150, d: 20 }] // market + gardens + schools
     const inRect = (x, z, r) => Math.abs(x - r.x) < r.w && Math.abs(z - r.z) < r.d
     const obstaclesNow = obstacles.slice() // buildings, water, kiosks; the belt trees come later
     const blocked = (x, z, pad = 1.2) => {
@@ -801,6 +803,52 @@ export function buildCampus(scene, { shadows = true, detail = 'medium' } = {}) {
     console.log('[campus] planted', planted, 'trees in groves and singles')
   }
 
+  // ── the Schools: eight of the JARVIS Brain's worlds as themed plazas on the north shore ──
+  // Each is a paved court with a headline model in the middle and its ring pieces around it,
+  // built with the brain's own palette. They show what is already built: click one to open
+  // that world in the Brain.
+  const SCHOOLS = [
+    { id: 'dinosaurs', name: 'Dinosaurs', hero: 'dinoskeleton', ring: ['fossildig', 'fossilslab', 'treeoflife'], palette: 'brain' },
+    { id: 'science', name: 'Science', hero: 'vandegraaff', ring: ['chemistryset', 'microscope', 'atom', 'telescope'], palette: 'brain' },
+    { id: 'geography', name: 'Geography', hero: 'globe', ring: ['volcano', 'stratacutaway', 'compass', 'geode'], palette: 'brain' },
+    { id: 'anatomy', name: 'Anatomy', hero: 'heart', ring: ['skull', 'skeletonarm', 'spine', 'lungs', 'brainlobes'], palette: 'brain' },
+    { id: 'maya', name: 'The Maya', hero: 'mayapyramid', ring: ['stelae'], palette: 'brain' },
+    { id: 'castles', name: 'Castles', hero: 'concentriccastle', ring: ['motteandbailey', 'japanesecastle', 'crusadercastle', 'trebuchet'], palette: 'medieval' },
+    { id: 'recipes', name: 'Recipes', hero: 'pizzaoven', ring: ['bakery', 'millstone', 'picnictable', 'mealbench', 'spicerack'], palette: 'brain' },
+    { id: 'space', name: 'Space', hero: 'saturnv', ring: ['iss', 'jwst', 'hubble', 'launchpad', 'marsrover', 'moonbase'], palette: 'space' },
+  ]
+  const SCHOOL_Z = -121
+  const SCHOOL_STEP = 36
+  const schoolMarks = []
+  SCHOOLS.forEach((sc, i) => {
+    const x = (i - (SCHOOLS.length - 1) / 2) * SCHOOL_STEP
+    const z = SCHOOL_Z
+    flats.push(flat(SCHOOL_STEP - 4, 28, PAVE, x, z, Y_PAVE))
+    flats.push(flat(4, 12, PAVE, x, z + 20, Y_PAVE)) // a path down to the north road
+    // the headline model in the middle, its ring in a horseshoe open to the plaza side (+z)
+    const hero = place(sc.hero, x, z - 1, { district: sc.palette, ry: 0, scale: 1.7 * 1.45, id: `school:${sc.id}`, tag: 'school', clearance: 1.0, seed: hashStr(sc.id) })
+    if (hero) pickables.push(hero.root)
+    const n = sc.ring.length
+    sc.ring.forEach((name, k) => {
+      const a = P * 0.1 + (k / Math.max(1, n - 1)) * P * 0.8 // 18deg .. 162deg, round the back and sides
+      const rx = x + Math.cos(a) * 11.5
+      const rz = z - 1 - Math.sin(a) * 9
+      const b = place(name, rx, rz, { district: sc.palette, ry: Math.atan2(x - rx, z - rz), scale: 1.7 * 1.05, id: `school:${sc.id}`, tag: 'school', clearance: 0.6, seed: hashStr(name) })
+      if (b) pickables.push(b.root)
+    })
+    place('flagpole', x - 9, z + 12, { district: sc.palette })
+    place('flagpole', x + 9, z + 12, { district: sc.palette })
+    stamp('lamppost', x - SCHOOL_STEP / 2 + 3, z + 11, P / 2)
+    stamp('lamppost', x + SCHOOL_STEP / 2 - 3, z + 11, -P / 2)
+    stamp('parkbench', x - 8, z + 12, P)
+    stamp('parkbench', x + 8, z + 12, P)
+    for (let k = 0; k < 4; k++) stamp('campustreetall', x - SCHOOL_STEP / 2 + 2, z - 10 + k * 6, k)
+    schoolMarks.push({ id: `school:${sc.id}`, name: `School of ${sc.name}`, x, y: 9, z: z - 2, kind: 'school', school: sc.id })
+    for (let k = 0; k < 5; k++) spots.grounds.push({ x: x - 10 + k * 5, z: z + 6 })
+  })
+  const schoolsRoad = flat(SCHOOLS.length * SCHOOL_STEP + 8, ROAD_W, ROAD, 0, SCHOOL_Z + 16, Y_ROAD)
+  flats.push(schoolsRoad)
+
   // ── commit the flats and the instances ─────────────────────────────────────────────
   mergeByColor(flats, flatMat, group)
   const instanceMeshes = []
@@ -830,6 +878,8 @@ export function buildCampus(scene, { shadows = true, detail = 'medium' } = {}) {
     { id: 'maze', name: 'The Maze', x: 108, y: 3, z: -64, kind: 'place' },
   ]
   for (const [id, c] of castles) landmarks.push({ id, name: `Castle of ${c.castle.short}`, x: c.x, y: 13, z: c.z, kind: 'castle', accent: c.castle.accent })
+  landmarks.push(...schoolMarks)
+  landmarks.push({ id: 'schools', name: 'The Schools', x: 0, y: 3, z: SCHOOL_Z + 18, kind: 'place' })
   return {
     landmarks,
     group,

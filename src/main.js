@@ -207,6 +207,21 @@ function cardFor(hit) {
     const c = castleById(cid)
     return { kicker: `${c?.short || ''} badge`, title: badge, text: `One of ${c?.badges.length || ''} badges in the Castle of ${c?.name || ''}. Earn it and this kiosk lights up.`, accent: c?.accent, badges: [{ name: 'Not yet earned', lit: false }] }
   }
+  if (hit.tag === 'school' || hit.kind === 'school') {
+    const sid = String(id).replace('school:', '')
+    const SCHOOL = {
+      dinosaurs: ['Dinosaurs', 'A fossil dig, a mounted skeleton and the tree of life. From the JARVIS Brain\'s Dinosaurs world.'],
+      science: ['Science', 'Van de Graaff, a chemistry bench, a microscope, an atom and a telescope. Hands-on science.'],
+      geography: ['Geography', 'A globe, a volcano cut open, rock strata and a compass. The planet, in pieces.'],
+      anatomy: ['Anatomy', 'A beating heart, a skull, a spine, lungs and the brain. The body, in pieces.'],
+      maya: ['The Maya', 'A stepped pyramid and carved stelae. Cities, calendars and mathematics of the Maya.'],
+      castles: ['Castles', 'Concentric, motte-and-bailey, Japanese and crusader castles, and a trebuchet to test them.'],
+      recipes: ['Recipes', 'A pizza oven, a bakery, a millstone and a picnic table. Cooking as chemistry and culture.'],
+      space: ['Space', 'Saturn V, the ISS, JWST, Hubble, a launchpad, a Mars rover and a moon base.'],
+    }[sid]
+    if (!SCHOOL) return null
+    return { kicker: 'School', title: `School of ${SCHOOL[0]}`, text: SCHOOL[1], accent: BRAND.lime, actions: [{ label: 'Fly there', fn: () => { const l = campus.landmarks.find((m) => m.id === `school:${sid}`); if (l) rig.focus(new THREE.Vector3(l.x, 0, l.z), { distance: 48 }) }, primary: true }, { label: 'Open in the Brain', fn: () => window.open(`https://brain.kcproto.com/${sid}`, '_blank', 'noopener') }] }
+  }
   const INFO = {
     hall: ['The Great Hall', 'Where the AI tutor lives. Every lesson starts here.'],
     amphitheater: ['The Amphitheater', 'Mentor talks, showcases and the badge ceremonies.'],
@@ -214,6 +229,7 @@ function cardFor(hit) {
     library: ['The Library', '350+ modules and 1,500+ media assets.'],
     observatory: ['The Observatory', 'Space, and everything you can see from here.'],
     gate: ['Welcome Gate', 'Learning for the Intelligence Age.'],
+    schools: ['The Schools', 'Eight worlds already built in the JARVIS Brain, standing on the north shore.'],
   }
   const info = INFO[hit.tag]
   return info ? { kicker: 'Campus', title: info[0], text: info[1], accent: BRAND.purple } : null
@@ -289,7 +305,10 @@ const labels = (() => {
     el.style.pointerEvents = 'none'
     el.addEventListener('click', () => {
       if (l.kind === 'castle') flyTo(l.id)
-      else {
+      else if (l.kind === 'school') {
+        rig.focus(new THREE.Vector3(l.x, 0, l.z), { distance: 48 })
+        hud.showCard(cardFor({ kind: 'piece', id: l.id, tag: 'school' }))
+      } else {
         rig.focus(new THREE.Vector3(l.x, 0, l.z), { distance: 70 })
         const card = cardFor({ kind: 'piece', id: l.id, tag: l.kind })
         if (card) hud.showCard(card)
@@ -307,7 +326,7 @@ const labels = (() => {
     const h = engine.canvas.clientHeight
     for (const it of items) {
       // far out only the castles and the heart read; zoomed in everything does
-      const want = visible && (it.l.kind === 'castle' || it.l.kind === 'hall' || far < 260) && far < 420
+      const want = visible && (it.l.kind === 'castle' || it.l.kind === 'hall' || it.l.kind === 'school' || far < 260) && far < 420
       v.set(it.l.x, it.l.y, it.l.z).project(cam)
       const onScreen = want && v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1
       if (onScreen) {
