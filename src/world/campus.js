@@ -260,7 +260,8 @@ export function buildCampus(scene, { shadows = true, detail = 'medium' } = {}) {
   const place = (name, x, z, { ry = 0, district = 'grounds', seed, scale, onto = group, clearance = 0.6, id, tag, palette } = {}) => {
     const built = build(name, { district, seed: seed != null ? seed : hashStr(`${name}:${x}:${z}`), scale, shadows, palette })
     if (!built) return null
-    built.root.position.set(x, 0, z)
+    // castles carry their own moat / crag skirt just under y=0; lift them clear of the lawn plane
+    built.root.position.set(x, tag === 'castle' ? 0.09 : 0, z)
     built.root.rotation.y = ry
     built.root.userData.piece = name
     built.root.userData.id = id || null
