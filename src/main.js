@@ -277,7 +277,7 @@ try {
   savedHome = JSON.parse(localStorage.getItem(HOME_KEY) || 'null')
 } catch {}
 rig.setHome(savedHome || DEFAULT_HOME, { jump: true })
-const intro = { t: 0, dur: 5.5, from: { distance: 400, polar: THREE.MathUtils.degToRad(82) }, active: !new URLSearchParams(location.search).has('nointro') }
+const intro = { t: 0, dur: 6.5, from: { distance: 410, polar: THREE.MathUtils.degToRad(74) }, active: !new URLSearchParams(location.search).has('nointro') }
 const homeDistance = rig.desiredDistance
 const homePolar = rig.desiredPolar
 if (intro.active) {
@@ -316,7 +316,7 @@ engine.add({
     if (intro.active) {
       intro.t += dt
       const k = Math.min(1, intro.t / intro.dur)
-      const e = 1 - Math.pow(1 - k, 3)
+      const e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2
       rig.distance = rig.desiredDistance = THREE.MathUtils.lerp(intro.from.distance, homeDistance, e)
       rig.polar = rig.desiredPolar = THREE.MathUtils.lerp(intro.from.polar, homePolar, e)
       rig.azimuth = rig.desiredAzimuth = rig.home.azimuth - (1 - e) * 0.9

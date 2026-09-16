@@ -278,8 +278,10 @@ export function buildCampus(scene, { shadows = true, detail = 'medium' } = {}) {
 
   // ── lawn ───────────────────────────────────────────────────────────────────────────
   const lawnMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.96, metalness: 0, map: lawnTexture() })
-  lawnMat.map.repeat.set((EXTENT.x * 2 + 120) / 26, (EXTENT.z * 2 + 120) / 26)
-  const lawn = new THREE.Mesh(new THREE.PlaneGeometry(EXTENT.x * 2 + 120, EXTENT.z * 2 + 120), lawnMat)
+  // the lawn runs to the horizon; fog takes it the rest of the way
+  const LAWN_SIZE = 3600
+  lawnMat.map.repeat.set(LAWN_SIZE / 26, LAWN_SIZE / 26)
+  const lawn = new THREE.Mesh(new THREE.PlaneGeometry(LAWN_SIZE, LAWN_SIZE), lawnMat)
   lawn.rotation.x = -P / 2
   lawn.receiveShadow = true
   lawn.name = 'lawn'
