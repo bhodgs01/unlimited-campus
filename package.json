@@ -1,0 +1,23 @@
+{
+  "name": "unlimited-campus",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Unlimited Campus: a walkable 3D + VR campus for the Six Castles of Human Flourishing.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "serve": "node server/serve.mjs",
+    "start": "vite build && node server/serve.mjs"
+  },
+  "dependencies": {
+    "three": "^0.185.0"
+  },
+  "devDependencies": {
+    "vite": "^7.1.0"
+  }
+}

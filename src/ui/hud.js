@@ -1,0 +1,198 @@
+/**
+ * A lean HUD for the campus: a title, a left rail (Home, Orbit, Day/Night, Help), the six
+ * castle chips along the bottom, a card for whatever was clicked, and toasts. Built on the
+ * colony's stylesheet (.hud .panel .btn .rail .chips .chip .toasts) plus a few rules of its
+ * own, so the two apps stay visually related.
+ */
+import { CASTLES, BRAND } from '../data/castles.js'
+
+const ICON = {
+  home: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>',
+  orbit: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M20.2 6.4a9 9 0 1 1-3.6-2.4"/></svg>',
+  sun: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
+  moon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>',
+  help: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .8-1 1.5v.7M12 17h.01"/></svg>',
+  vr: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="10" rx="3"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/></svg>',
+  crew: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>',
+}
+
+const CSS = `
+.uc-title{position:absolute;left:14px;top:14px;padding:10px 14px;display:flex;align-items:center;gap:10px;pointer-events:auto}
+.uc-title b{font-size:14px;letter-spacing:.14em;text-transform:uppercase;font-weight:700}
+.uc-title i{width:9px;height:9px;border-radius:50%;background:${BRAND.purple};box-shadow:0 0 12px ${BRAND.purple}}
+.uc-title small{color:var(--muted);font-size:12px}
+.uc-chips{position:absolute;left:50%;bottom:max(14px,env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;gap:6px;padding:6px;max-width:calc(100vw - 28px);flex-wrap:wrap;justify-content:center}
+.uc-chips .chip{display:flex;align-items:center;gap:7px;color:var(--text);white-space:nowrap;flex:0 0 auto}
+.uc-chips .chip i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.uc-chips .chip.active{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.3)}
+.uc-card{position:absolute;right:14px;top:14px;width:min(340px,calc(100vw - 28px));padding:16px 16px 14px;display:none;flex-direction:column;gap:10px;pointer-events:auto}
+.uc-card.open{display:flex}
+.uc-card .kicker{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.uc-card h2{margin:0;font-size:20px;line-height:1.15;font-weight:700}
+.uc-card p{margin:0;color:var(--muted);font-size:13.5px;line-height:1.5}
+.uc-card .badges{display:flex;flex-wrap:wrap;gap:5px}
+.uc-card .badge{font-size:12px;padding:4px 9px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.05)}
+.uc-card .badge.lit{border-color:transparent;color:#111;font-weight:600}
+.uc-card .row{display:flex;gap:6px;justify-content:flex-end}
+.uc-card .x{position:absolute;right:10px;top:8px;width:28px;height:28px;min-width:28px;padding:0;border-radius:8px}
+.uc-help{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(420px,calc(100vw - 28px));padding:18px 20px;display:none;flex-direction:column;gap:8px;pointer-events:auto}
+.uc-help.open{display:flex}
+.uc-help h3{margin:0 0 4px;font-size:16px}
+.uc-help p{margin:0;color:var(--muted);font-size:13.5px;line-height:1.5}
+.uc-help kbd{font:inherit;font-size:12px;padding:1px 6px;border:1px solid var(--line);border-radius:6px;background:rgba(255,255,255,.06)}
+.uc-toast{padding:9px 13px;border-radius:10px;font-size:12.5px;max-width:320px}
+@media (max-width:640px){.uc-card{top:auto;bottom:64px;right:14px;left:14px;width:auto}.uc-title small{display:none}}
+`
+
+export class Hud {
+  constructor(root, settings, actions) {
+    this.settings = settings
+    this.actions = actions
+    const style = document.createElement('style')
+    style.textContent = CSS
+    document.head.appendChild(style)
+
+    this.el = document.createElement('div')
+    this.el.className = 'hud'
+    this.el.innerHTML = `
+      <div class="panel uc-title"><i></i><b>Unlimited Campus</b><small>Six Castles of Human Flourishing</small></div>
+      <div class="panel rail">
+        <button class="btn" data-act="home" title="Home view (hold to save this view as home)">${ICON.home}</button>
+        <button class="btn" data-act="orbit" title="Orbit the campus">${ICON.orbit}</button>
+        <button class="btn" data-act="night" title="Day / night">${ICON.moon}</button>
+        <button class="btn" data-act="crew" title="Show / hide students">${ICON.crew}</button>
+        <button class="btn" data-act="vr" title="Enter VR" hidden>${ICON.vr}</button>
+        <button class="btn" data-act="help" title="Help">${ICON.help}</button>
+      </div>
+      <div class="panel uc-chips"></div>
+      <div class="panel uc-card"><button class="btn x" data-act="close">✕</button><div class="kicker"></div><h2></h2><p></p><div class="badges"></div><div class="row"></div></div>
+      <div class="panel uc-help">
+        <h3>Walking the campus</h3>
+        <p><kbd>Drag</kbd> to pan, <kbd>Wheel</kbd> or pinch to zoom, <kbd>Right-drag</kbd> to orbit.</p>
+        <p>Click a castle for its badges, a badge kiosk for the badge, a student to meet them.</p>
+        <p>The chips along the bottom fly to each castle. Home returns to the plaza.</p>
+        <p>On a Quest, open this page in the headset browser and press Enter VR.</p>
+        <div class="row"><button class="btn primary" data-act="closehelp">Got it</button></div>
+      </div>
+      <div class="toasts"></div>`
+    root.appendChild(this.el)
+    this.$ = (s) => this.el.querySelector(s)
+    this.card = this.$('.uc-card')
+    this.help = this.$('.uc-help')
+    this.chips = this.$('.uc-chips')
+
+    for (const c of CASTLES) {
+      const b = document.createElement('button')
+      b.className = 'chip'
+      b.dataset.castle = c.id
+      b.innerHTML = `<i style="background:${c.accent};box-shadow:0 0 8px ${c.accent}"></i>${c.short}`
+      b.title = c.name
+      b.addEventListener('click', () => actions.flyTo?.(c.id))
+      this.chips.appendChild(b)
+    }
+    this.el.addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-act]')
+      if (!b) return
+      const act = b.dataset.act
+      if (act === 'close') this.closeCard()
+      else if (act === 'closehelp') this.toggleHelp(false)
+      else if (act === 'help') this.toggleHelp()
+      else actions[act]?.()
+    })
+    // hold Home to save the view
+    const home = this.$('[data-act="home"]')
+    let holdT = 0
+    home.addEventListener('pointerdown', () => {
+      holdT = setTimeout(() => {
+        actions.saveHome?.()
+        navigator.vibrate?.(18)
+        this.toast('Home view saved')
+        holdT = 0
+      }, 650)
+    })
+    const cancel = () => {
+      if (holdT) clearTimeout(holdT)
+      holdT = 0
+    }
+    home.addEventListener('pointerup', cancel)
+    home.addEventListener('pointerleave', cancel)
+    // the click fires after pointerup; a completed hold must not also fly home
+    home.addEventListener('click', (ev) => {
+      if (holdT === 0 && ev.detail !== 0 && this._saved) {
+        this._saved = false
+        ev.stopImmediatePropagation()
+      }
+    }, true)
+  }
+
+  setActiveChip(id) {
+    for (const b of this.chips.children) b.classList.toggle('active', b.dataset.castle === id)
+  }
+  setOrbit(on) {
+    this.$('[data-act="orbit"]').classList.toggle('active', on)
+  }
+  setNight(on) {
+    const b = this.$('[data-act="night"]')
+    b.innerHTML = on ? ICON.sun : ICON.moon
+    b.classList.toggle('active', on)
+  }
+  setCrew(on) {
+    this.$('[data-act="crew"]').classList.toggle('active', on)
+  }
+  setVrAvailable(on) {
+    this.$('[data-act="vr"]').hidden = !on
+  }
+  setVrActive(on) {
+    this.$('[data-act="vr"]').classList.toggle('active', on)
+  }
+  toggleHelp(force) {
+    this.help.classList.toggle('open', force)
+  }
+
+  /** card = { kicker, title, text, badges?: [{name, lit, color}], accent, actions?: [{label, fn, primary}] } */
+  showCard(card) {
+    const c = this.card
+    c.querySelector('.kicker').textContent = card.kicker || ''
+    c.querySelector('h2').textContent = card.title || ''
+    c.querySelector('p').textContent = card.text || ''
+    const badges = c.querySelector('.badges')
+    badges.innerHTML = ''
+    for (const b of card.badges || []) {
+      const s = document.createElement('span')
+      s.className = `badge${b.lit ? ' lit' : ''}`
+      s.textContent = b.name
+      if (b.lit) s.style.background = b.color || card.accent || BRAND.lime
+      badges.appendChild(s)
+    }
+    const row = c.querySelector('.row')
+    row.innerHTML = ''
+    for (const a of card.actions || []) {
+      const b = document.createElement('button')
+      b.className = `btn${a.primary ? ' primary' : ''}`
+      b.textContent = a.label
+      b.addEventListener('click', a.fn)
+      row.appendChild(b)
+    }
+    c.style.borderColor = card.accent ? `${card.accent}66` : ''
+    c.classList.add('open')
+  }
+  closeCard() {
+    this.card.classList.remove('open')
+    this.actions.cardClosed?.()
+  }
+
+  toast(message, kind = '') {
+    const wrap = this.$('.toasts')
+    const t = document.createElement('div')
+    t.className = `panel toast uc-toast ${kind}`
+    t.textContent = message
+    wrap.appendChild(t)
+    setTimeout(() => t.remove(), 4200)
+  }
+  removeBoot() {
+    const boot = document.querySelector('.boot')
+    if (!boot) return
+    boot.style.opacity = '0'
+    setTimeout(() => boot.remove(), 520)
+  }
+}
