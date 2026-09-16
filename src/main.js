@@ -8,6 +8,7 @@ import { Astronauts } from './agents/astronauts.js'
 import { Navigation } from './agents/navigation.js'
 import { crewRig, loadCrew } from './agents/crew.js'
 import { buildCampus, DISTRICTS } from './world/campus.js'
+import { setNight } from './world/pieces.js'
 import { CASTLES, castleById, MENTORS, BRAND } from './data/castles.js'
 import { Hud } from './ui/hud.js'
 import { installVr } from './vr.js'
@@ -47,8 +48,8 @@ const CAMPUS_PLANET = {
   horizon: 0x9cc3e4,
   sky: { top: 0x2a5ea3, bottom: 0xbcdcf0 },
   fog: { color: 0x9fbfd8, near: 380, far: 1400 },
-  sun: { color: 0xfff0d4, intensity: 2.4, night: 0.14 },
-  ambient: { sky: 0x88bfe8, ground: 0x3f5a30, intensity: 0.95 },
+  sun: { color: 0xfff0d4, intensity: 2.4, night: 0.3 },
+  ambient: { sky: 0x88bfe8, ground: 0x3f5a30, intensity: 1.1 },
   atmosphere: 1,
   craters: 0,
   roughness: 0.75,
@@ -59,6 +60,7 @@ const CAMPUS_PLANET = {
 const sky = new Sky(engine.scene, settings, engine.renderer)
 sky.setPlanet(CAMPUS_PLANET)
 sky.setTime(settings.get('timeOfDay'))
+setNight(0)
 
 // ── the campus ──────────────────────────────────────────────────────────────────────────
 const shadows = settings.shadowSize > 0
@@ -146,7 +148,7 @@ const hud = new Hud(app, settings, {
   night: () => {
     night = !night
     hud.setNight(night)
-    timeTween = { from: sky.time, to: night ? 0.93 : 0.42, t: 0 }
+    timeTween = { from: sky.time, to: night ? 0.92 : 0.38, t: 0 }
   },
   crew: () => {
     astronauts.group.visible = !astronauts.group.visible
@@ -268,6 +270,61 @@ engine.canvas.addEventListener('pointermove', (e) => {
   engine.canvas.style.cursor = agent ? 'pointer' : ''
 })
 
+// ── floating landmark labels ─────────────────────────────────────────────────────────
+const labels = (() => {
+  const layer = document.createElement('div')
+  layer.className = 'uc-labels'
+  app.appendChild(layer)
+  const style = document.createElement('style')
+  style.textContent = `.uc-labels{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:5}
+  .uc-label{position:absolute;left:0;top:0;transform:translate(-50%,-100%);padding:5px 11px;border-radius:999px;background:rgba(14,17,26,.78);color:#eef1f7;font-size:12.5px;font-weight:600;letter-spacing:.01em;white-space:nowrap;border:1px solid rgba(255,255,255,.12);box-shadow:0 4px 14px rgba(0,0,0,.35);backdrop-filter:blur(6px);pointer-events:auto;cursor:pointer;transition:opacity .25s ease;will-change:transform}
+  .uc-label i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px;vertical-align:1px}
+  .uc-label.place{font-weight:500;color:#cfd6e4}`
+  document.head.appendChild(style)
+  const items = campus.landmarks.map((l) => {
+    const el = document.createElement('div')
+    el.className = `uc-label ${l.kind}`
+    el.innerHTML = `${l.accent ? `<i style="background:${l.accent};box-shadow:0 0 8px ${l.accent}"></i>` : ''}${l.name}`
+    el.style.opacity = '0'
+    el.style.pointerEvents = 'none'
+    el.addEventListener('click', () => {
+      if (l.kind === 'castle') flyTo(l.id)
+      else {
+        rig.focus(new THREE.Vector3(l.x, 0, l.z), { distance: 70 })
+        const card = cardFor({ kind: 'piece', id: l.id, tag: l.kind })
+        if (card) hud.showCard(card)
+      }
+    })
+    layer.appendChild(el)
+    return { l, el, v: new THREE.Vector3(), shown: false }
+  })
+  let visible = true
+  const v = new THREE.Vector3()
+  function update() {
+    const cam = engine.camera
+    const far = rig.distance
+    const w = engine.canvas.clientWidth
+    const h = engine.canvas.clientHeight
+    for (const it of items) {
+      // far out only the castles and the heart read; zoomed in everything does
+      const want = visible && (it.l.kind === 'castle' || it.l.kind === 'hall' || far < 260) && far < 420
+      v.set(it.l.x, it.l.y, it.l.z).project(cam)
+      const onScreen = want && v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1
+      if (onScreen) {
+        const x = (v.x * 0.5 + 0.5) * w
+        const y = (-v.y * 0.5 + 0.5) * h
+        it.el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -100%)`
+      }
+      if (onScreen !== it.shown) {
+        it.shown = onScreen
+        it.el.style.opacity = onScreen ? '1' : '0'
+        it.el.style.pointerEvents = onScreen ? 'auto' : 'none'
+      }
+    }
+  }
+  return { update, toggle: (on) => { visible = on ?? !visible } }
+})()
+
 // ── VR ──────────────────────────────────────────────────────────────────────────────────
 const vr = installVr({ engine, rig, hud, astronauts, campus, cardFor })
 
@@ -308,6 +365,7 @@ settings.onChange((changed, scope) => {
   sky.onSettingsChanged?.(changed)
   astronauts.onSettingsChanged?.(changed)
   if (changed.has('timeOfDay')) sky.setTime(settings.get('timeOfDay'))
+setNight(0)
 })
 
 // ── frame loop ──────────────────────────────────────────────────────────────────────────
@@ -332,6 +390,12 @@ engine.add({
     else rig.update(dt)
     sky.setFocus(vr.active ? vr.player.position : rig.target)
     sky.update(dt, elapsed, engine.camera)
+    // the campus lights come up as the sun goes down: windows, lamps, neon bands, bloom
+    const nightK = 1 - (sky.dayFactor ?? 1)
+    setNight(nightK)
+    const bloomWanted = Math.round((0.22 + nightK * 0.55) * 100) / 100
+    if (settings.get('bloom') && Math.abs(settings.get('bloomStrength') - bloomWanted) > 0.02) settings.set('bloomStrength', bloomWanted)
+    if (!vr.active) labels.update()
     campus.tick(dt)
     if (astronauts.group.visible) {
       astronauts.update(dt, elapsed)
@@ -362,6 +426,8 @@ async function boot() {
   }
 }
 boot()
+
+engine.canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); console.warn('webgl context lost'); hud.toast('Graphics context lost, reloading…', 'err'); setTimeout(() => location.reload(), 1500) })
 
 // handy for probes
 window.__campus = { engine, rig, sky, campus, astronauts, roster, settings, hud, vr }

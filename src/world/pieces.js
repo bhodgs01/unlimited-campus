@@ -75,6 +75,21 @@ export function hashStr(s) {
   return h >>> 0
 }
 
+/** Every emissive material ever made, so the night can turn the campus's lights up. */
+const LIT = new Set()
+let _night = 0
+/** k = 0 day .. 1 night. GLOW parts go from a soft glow to lamplight; neon bands brighten. */
+export function setNight(k) {
+  k = Math.max(0, Math.min(1, k))
+  if (Math.abs(k - _night) < 0.004) return
+  _night = k
+  for (const { m, cell, e } of LIT) {
+    const boost = cell === 'GLOW' ? 1 + k * 3.2 : cell === 'ACCENT' ? 1 + k * 2.2 : 1 + k * 1.6
+    m.emissiveIntensity = boost
+  }
+}
+export const nightLevel = () => _night
+
 // ── The Composer ──────────────────────────────────────────────────────────────────────
 class Composer {
   constructor(pal, opts = {}) {
@@ -111,6 +126,8 @@ class Composer {
       side: THREE.DoubleSide,
     })
     this.materials[key] = m
+    // lit parts are pumped at night (windows, lamps, beacons, neon bands)
+    if (cell === 'GLOW' || cell === 'ACCENT' || cell === 'ACCENT2') LIT.add({ m, cell, e })
     return m
   }
   top() {

@@ -126,7 +126,7 @@ const DEFAULTS = {
 
   // World
   planet: 'campus',
-  timeOfDay: 0.4,
+  timeOfDay: 0.38,
   autoTime: false,
   clockTime: false,
   dayLength: 240, // seconds for a full cycle when autoTime is on

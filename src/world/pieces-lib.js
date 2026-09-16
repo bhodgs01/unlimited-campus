@@ -669,6 +669,26 @@ export default function PIECES(THREE, CELL) {
     c.end();
     return {label:"Student Launchpad",kind:'landmark'};
   },
+  markettent(c, rand) {
+    // a striped market tent: four poles, a hipped canvas canopy, a counter and crates
+    const box = (w, h, d, cell, o = {}) => c.geom(new THREE.BoxGeometry(w, h, d), cell, o)
+    const cyl = (r, h, cell, o = {}, seg = 8) => c.geom(new THREE.CylinderGeometry(r, r, h, seg), cell, o)
+    const stripe = rand() < 0.5 ? CELL.ACCENT : CELL.ACCENT2
+    for (const x of [-1.1, 1.1]) for (const z of [-0.9, 0.9]) cyl(0.04, 1.5, CELL.WOOD, { x, y: 0.75, z })
+    c.geom(new THREE.ConeGeometry(1.75, 0.7, 4), CELL.CLOTH, { y: 1.85, ry: Math.PI / 4 })
+    for (let i = 0; i < 4; i++) {
+      const g = new THREE.BoxGeometry(0.22, 0.03, 1.28)
+      g.rotateX(-0.42)
+      g.rotateY((i * Math.PI) / 2)
+      c.geom(g, stripe, { x: Math.sin((i * Math.PI) / 2) * 0.62, y: 1.78, z: Math.cos((i * Math.PI) / 2) * 0.62 })
+    }
+    box(2.4, 0.04, 2.0, CELL.CLOTH, { y: 1.5 })
+    box(1.6, 0.7, 0.5, CELL.WOOD, { y: 0.35, z: 0.7 })
+    box(0.5, 0.4, 0.5, CELL.WOOD, { x: -0.7, y: 0.2, z: -0.4 })
+    box(0.5, 0.4, 0.5, CELL.WOOD, { x: 0.6, y: 0.2, z: -0.5, ry: 0.4 })
+    c.geom(new THREE.SphereGeometry(0.08, 6, 5), CELL.GLOW, { y: 1.42, emissive: 0.9 })
+    return { label: 'Market tent', kind: 'landmark' }
+  },
   // END PIECES
   }
 }

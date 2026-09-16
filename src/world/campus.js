@@ -21,6 +21,8 @@ const P = Math.PI
 const Y_ROAD = 0.03
 const Y_PAVE = 0.05
 const Y_FIELD = 0.02
+const Y_SHORE = 0.028
+const Y_WATER = 0.05
 
 // ── colours of the flat world ─────────────────────────────────────────────────────────
 const LAWN = 0x5f9a47
@@ -28,7 +30,7 @@ const ROAD = 0xd9d0bb
 const PAVE = 0xe2dccb
 const FIELD = 0x63a84f
 const LINE = 0xf4f1e8
-const WATER = 0x3f8ed1
+const WATER = 0x3a95dd
 const SHORE = 0xd8c99a
 const KERB = 0xbdb4a0
 
@@ -212,6 +214,33 @@ function lawnTexture(size = 512) {
   return tex
 }
 
+/** A flat ribbon of water along a centreline: points [{x,z}], constant half-width. */
+function ribbon(points, halfW, color, y) {
+  const left = []
+  const right = []
+  for (let i = 0; i < points.length; i++) {
+    const a = points[Math.max(0, i - 1)]
+    const b = points[Math.min(points.length - 1, i + 1)]
+    const dx = b.x - a.x
+    const dz = b.z - a.z
+    const len = Math.hypot(dx, dz) || 1
+    const nx = -dz / len
+    const nz = dx / len
+    left.push([points[i].x + nx * halfW, points[i].z + nz * halfW])
+    right.push([points[i].x - nx * halfW, points[i].z - nz * halfW])
+  }
+  const shape = new THREE.Shape()
+  shape.moveTo(left[0][0], left[0][1])
+  for (const [x, z] of left.slice(1)) shape.lineTo(x, z)
+  for (const [x, z] of right.reverse()) shape.lineTo(x, z)
+  shape.closePath()
+  const g = new THREE.ShapeGeometry(shape, 1)
+  g.rotateX(-P / 2)
+  g.translate(0, y, 0)
+  g.userData.color = color
+  return g
+}
+
 // ── the plan ──────────────────────────────────────────────────────────────────────────
 /**
  * Build the campus into `scene`. Returns everything the game needs to know about it:
@@ -241,9 +270,9 @@ export function buildCampus(scene, { shadows = true, detail = 'medium' } = {}) {
         color,
         new THREE.MeshStandardMaterial({
           color,
-          roughness: water ? 0.2 : 0.95,
+          roughness: water ? 0.62 : 0.95,
           metalness: 0,
-          emissive: water ? new THREE.Color(0x0b2f55) : new THREE.Color(0x000000),
+          emissive: water ? new THREE.Color(0x0e3a63) : new THREE.Color(0x000000),
           transparent: water,
           opacity: water ? 0.92 : 1,
         })
@@ -277,16 +306,62 @@ export function buildCampus(scene, { shadows = true, detail = 'medium' } = {}) {
     return built
   }
 
-  // ── lawn ───────────────────────────────────────────────────────────────────────────
+  // ── the island: sea to the horizon, a lawn plateau on a cliff, a forest belt round the rim ──
+  const SEA_Y = -6
+  const ISLAND = { rx: 252, rz: 166, wall: 7, seed: 0x15a7 }
+  const seaMat = new THREE.MeshStandardMaterial({ color: 0x2a6fb5, roughness: 0.55, metalness: 0.0, emissive: new THREE.Color(0x061e3a) })
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5000), seaMat)
+  sea.rotation.x = -P / 2
+  sea.position.y = SEA_Y
+  sea.receiveShadow = false
+  sea.name = 'sea'
+  group.add(sea)
   const lawnMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.96, metalness: 0, map: lawnTexture() })
-  // the lawn runs to the horizon; fog takes it the rest of the way
-  const LAWN_SIZE = 3600
-  lawnMat.map.repeat.set(LAWN_SIZE / 26, LAWN_SIZE / 26)
-  const lawn = new THREE.Mesh(new THREE.PlaneGeometry(LAWN_SIZE, LAWN_SIZE), lawnMat)
-  lawn.rotation.x = -P / 2
-  lawn.receiveShadow = true
-  lawn.name = 'lawn'
-  group.add(lawn)
+  lawnMat.map.repeat.set(1 / 26, 1 / 26)
+  const cliffMat = new THREE.MeshStandardMaterial({ color: 0x9b8462, roughness: 1, metalness: 0 })
+  /** Island outline: an ellipse with three sine harmonics so it has bays and headlands. */
+  const islandRadius = (() => {
+    const rand = mulberry32(ISLAND.seed)
+    const a1 = rand() * P * 2
+    const a2 = rand() * P * 2
+    const a3 = rand() * P * 2
+    return (t) => 1 + 0.05 * Math.sin(t * 2 + a1) + 0.035 * Math.sin(t * 3 + a2) + 0.02 * Math.sin(t * 7 + a3)
+  })()
+  const islandShape = new THREE.Shape()
+  const ISEG = 160
+  for (let i = 0; i <= ISEG; i++) {
+    const t = (i / ISEG) * P * 2
+    const k = islandRadius(t)
+    const px = Math.cos(t) * ISLAND.rx * k
+    const pz = Math.sin(t) * ISLAND.rz * k
+    if (i === 0) islandShape.moveTo(px, pz)
+    else islandShape.lineTo(px, pz)
+  }
+  const islandGeo = new THREE.ExtrudeGeometry(islandShape, { depth: ISLAND.wall, bevelEnabled: false, curveSegments: 1 })
+  islandGeo.rotateX(P / 2) // cap at y=0, wall down
+  const island = new THREE.Mesh(islandGeo, [lawnMat, cliffMat])
+  island.receiveShadow = true
+  island.name = 'island'
+  group.add(island)
+  /** Inside the island edge by `inset` metres at heading t. */
+  const rimPoint = (t, inset) => {
+    const k = islandRadius(t)
+    return { x: Math.cos(t) * (ISLAND.rx * k - inset), z: Math.sin(t) * (ISLAND.rz * k - inset * (ISLAND.rz / ISLAND.rx)) }
+  }
+  // the forest belt: dense mixed trees in a band just inside the cliff edge
+  {
+    const rand = mulberry32(0xf0e57)
+    const N = 2600
+    for (let i = 0; i < N; i++) {
+      const t = rand() * P * 2
+      const inset = 6 + Math.pow(rand(), 1.4) * 34
+      const p = rimPoint(t, inset)
+      // keep the belt off the campus grid itself
+      if (Math.abs(p.x) < EXTENT.x + 6 && Math.abs(p.z) < EXTENT.z + 6) continue
+      const kind = rand() < 0.55 ? 'campustree' : rand() < 0.6 ? 'campustreetall' : 'campustreeflat'
+      stamp(kind, p.x, p.z, rand() * P * 2, 0.85 + rand() * 0.5)
+    }
+  }
 
   // ── roads ──────────────────────────────────────────────────────────────────────────
   const ROAD_W = 6
@@ -477,8 +552,8 @@ export function buildCampus(scene, { shadows = true, detail = 'medium' } = {}) {
   {
     const lx = -150
     const lz = -62
-    flats.push(blob(27, lx, lz, 11, -0.02, SHORE))
-    flats.push(blob(25.5, lx, lz, 11, 0.0, WATER))
+    flats.push(blob(27, lx, lz, 11, Y_SHORE, SHORE))
+    flats.push(blob(25.5, lx, lz, 11, Y_WATER, WATER))
     obstacles.push({ x: lx, z: lz, r: 29 })
     place('boathouse', lx + 16, lz + 20, { district: 'grounds', ry: -P * 0.8 })
     place('pier', lx - 10, lz + 22, { district: 'grounds', ry: 0.2 })
@@ -499,8 +574,8 @@ export function buildCampus(scene, { shadows = true, detail = 'medium' } = {}) {
   // ── far east: two ponds, a lab quad and two pitches ───────────────────────────────
   {
     for (const [px, pz, r, seed] of [[152, -78, 14, 21], [166, -46, 9, 22]]) {
-      flats.push(blob(r + 1.5, px, pz, seed, -0.02, SHORE))
-      flats.push(blob(r, px, pz, seed, 0.0, WATER))
+      flats.push(blob(r + 1.5, px, pz, seed, Y_SHORE, SHORE))
+      flats.push(blob(r, px, pz, seed, Y_WATER, WATER))
       obstacles.push({ x: px, z: pz, r: r + 2 })
       for (let i = 0; i < 6; i++) {
         const a = (i / 6) * P * 2
@@ -550,6 +625,182 @@ export function buildCampus(scene, { shadows = true, detail = 'medium' } = {}) {
     for (let i = 0; i < 8; i++) spots.grounds.push({ x: x - 14 + i * 4, z: z + (i % 2 ? 4 : -4) })
   }
 
+  // ── the canal and the harbour along the south shore ───────────────────────────────
+  {
+    const pts = []
+    for (let x = -235; x <= 235; x += 10) pts.push({ x, z: 122 + Math.sin(x / 41) * 4 + Math.sin(x / 13) * 1.2 })
+    flats.push(ribbon(pts, 8.5, SHORE, Y_SHORE))
+    flats.push(ribbon(pts, 7, WATER, Y_WATER))
+    for (const p of pts) obstacles.push({ x: p.x, z: p.z, r: 8 })
+    flats.push(blob(16, 0, 121, 31, Y_SHORE, SHORE))
+    flats.push(blob(14.5, 0, 121, 31, Y_WATER, WATER))
+    obstacles.push({ x: 0, z: 121, r: 16 })
+    place('pier', -9, 110, { district: 'grounds', ry: 0.15 })
+    place('pier', 9, 110, { district: 'grounds', ry: -0.15 })
+    place('rowboat', -4, 118, { district: 'grounds', ry: 0.6 })
+    place('sailboat', 6, 124, { district: 'grounds', ry: 2.2 })
+    place('footbridge', -40, 122, { district: 'grounds', ry: P / 2 + 0.12 })
+    place('footbridge', 40, 121, { district: 'grounds', ry: P / 2 - 0.1 })
+    place('footbridge', -120, 124, { district: 'grounds', ry: P / 2 })
+    place('footbridge', 120, 121, { district: 'grounds', ry: P / 2 })
+    for (let x = -200; x <= 200; x += 11) {
+      if (Math.abs(x) < 20) continue
+      stamp('lamppost', x, 112, 0)
+      stamp(x % 22 === 0 ? 'campustreeflat' : 'campustree', x + 4, 133, x)
+    }
+    place('cafepavilion', -24, 108, { district: 'grounds', ry: 0 })
+    place('gazebo', 24, 108, { district: 'grounds' })
+    for (let i = 0; i < 10; i++) spots.grounds.push({ x: -50 + i * 11, z: 108 })
+  }
+
+  // ── the market: striped tents by the gardens, as in the reference ──────────────────
+  for (let i = 0; i < 8; i++) {
+    const x = -14 + (i % 4) * 9.5
+    const z = 62 + Math.floor(i / 4) * 9
+    place('markettent', x, z, { district: 'grounds', seed: 300 + i })
+  }
+  flats.push(flat(42, 22, PAVE, 0, 66.5, Y_PAVE))
+  for (let i = 0; i < 8; i++) spots.grounds.push({ x: -16 + i * 4.5, z: 66 })
+
+  // ── denser quads: a second row of buildings and paved courts in every district ──────
+  for (const castle of CASTLES) {
+    const d = DISTRICTS[castle.id]
+    const horizontal = d.face === 'south' || d.face === 'north'
+    const extra = ['dormblock', 'courtyardhouse', 'lecturehall']
+    const rand = mulberry32(hashStr(castle.id + 'extra'))
+    extra.forEach((name, i) => {
+      const along = -0.3 + i * 0.3
+      let x, z, ry
+      if (horizontal) {
+        z = d.cz + (d.face === 'south' ? -d.d / 2 + 5 : d.d / 2 - 5)
+        x = d.cx + along * d.w * 0.8
+        ry = d.face === 'south' ? 0 : P
+        if (Math.abs(x - d.cx) < 14) return // the castle stands here
+      } else {
+        x = d.cx + (d.face === 'east' ? -d.w / 2 + 5 : d.w / 2 - 5)
+        z = d.cz + along * d.d * 0.8
+        ry = d.face === 'east' ? -P / 2 : P / 2
+        if (Math.abs(z - d.cz) < 14) return
+      }
+      place(name, x, z, { district: castle.id, ry, seed: hashStr(`${castle.id}:x:${name}`) + Math.floor(rand() * 999) })
+    })
+    const cx = d.cx + (horizontal ? 0 : d.face === 'east' ? 6 : -6)
+    const cz = d.cz + (horizontal ? (d.face === 'south' ? 8 : -8) : 0)
+    flats.push(flat(horizontal ? 16 : 10, horizontal ? 10 : 16, PAVE, cx, cz, Y_PAVE))
+    stamp('parkbench', cx - 4, cz + 3, 0)
+    stamp('parkbench', cx + 4, cz - 3, P)
+    stamp('bikerack', cx + 5, cz + 4, P / 2)
+    stamp('signpost', cx - 5, cz - 4, rand() * 3)
+  }
+
+  // ── natural planting: groves, copses, hedgerows, bushes at every building, beds ──────
+  {
+    const rand = mulberry32(0x9e1d)
+    const ROAD_HALF = ROAD_W / 2 + 2.2
+    const nearRoad = (x, z) => {
+      for (const rz of ROADS_H) if (Math.abs(z - rz) < ROAD_HALF && Math.abs(x) <= EXTENT.x + 6) return true
+      for (const rx of ROADS_V) if (Math.abs(x - rx) < ROAD_HALF && Math.abs(z) <= EXTENT.z + 6) return true
+      if (Math.abs(x) < 6.5 && Math.abs(z) > 48 && Math.abs(z) < 104) return true // the avenues
+      if (Math.abs(z) < ROAD_HALF && Math.abs(x) > 118 && Math.abs(x) < 182) return true // the middle roads
+      const r = Math.hypot(x, z)
+      if (r < PLAZA.r + 4) return true // the whole plaza is laid out by hand
+      return false
+    }
+    const inIsland = (x, z) => {
+      const t = Math.atan2(z / ISLAND.rz, x / ISLAND.rx)
+      const k = islandRadius(t)
+      return (x / (ISLAND.rx * k)) ** 2 + (z / (ISLAND.rz * k)) ** 2 < 1
+    }
+    const pitchRects = [[-150, 27], [150, 30], [150, 78]].map(([x, z]) => ({ x, z, w: 22, d: 16 }))
+    const flatRects = [{ x: 0, z: 66.5, w: 23, d: 13 }, { x: 0, z: 84, w: 40, d: 26 }] // market + gardens
+    const inRect = (x, z, r) => Math.abs(x - r.x) < r.w && Math.abs(z - r.z) < r.d
+    const obstaclesNow = obstacles.slice() // buildings, water, kiosks; the belt trees come later
+    const blocked = (x, z, pad = 1.2) => {
+      if (!inIsland(x, z) || nearRoad(x, z)) return true
+      for (const r of pitchRects) if (inRect(x, z, r)) return true
+      for (const r of flatRects) if (inRect(x, z, r)) return true
+      for (const o of obstaclesNow) {
+        const d = o.r + pad
+        if (Math.abs(o.x - x) < d && Math.abs(o.z - z) < d && (o.x - x) ** 2 + (o.z - z) ** 2 < d * d) return true
+      }
+      return false
+    }
+    const SPECIES = ['campustree', 'campustree', 'campustree', 'campustreeflat', 'campustreetall']
+    let planted = 0
+    const tree = (x, z, kind, sMin = 0.8, sMax = 1.35) => {
+      if (blocked(x, z, 0.9)) return false
+      stamp(kind, x, z, rand() * P * 2, sMin + rand() * (sMax - sMin))
+      obstaclesNow.push({ x, z, r: 0.8 })
+      planted++
+      return true
+    }
+    // groves: a seed point on the lawn, then a clump of mostly one species
+    for (let g = 0; g < 140; g++) {
+      const gx = (rand() - 0.5) * 2 * (EXTENT.x + 40)
+      const gz = (rand() - 0.5) * 2 * (EXTENT.z + 40)
+      if (blocked(gx, gz, 3)) continue
+      const main = SPECIES[Math.floor(rand() * SPECIES.length)]
+      const n = 6 + Math.floor(rand() * 22)
+      const radius = 5 + rand() * 11
+      for (let i = 0; i < n; i++) {
+        const a = rand() * P * 2
+        const r = Math.sqrt(rand()) * radius
+        const kind = rand() < 0.78 ? main : SPECIES[Math.floor(rand() * SPECIES.length)]
+        tree(gx + Math.cos(a) * r, gz + Math.sin(a) * r, kind)
+      }
+    }
+    // scattered singles and pairs across the lawns
+    for (let i = 0; i < 900; i++) {
+      const x = (rand() - 0.5) * 2 * (EXTENT.x + 30)
+      const z = (rand() - 0.5) * 2 * (EXTENT.z + 30)
+      if (tree(x, z, SPECIES[Math.floor(rand() * SPECIES.length)]) && rand() < 0.35) tree(x + 2 + rand() * 2, z + (rand() - 0.5) * 3, SPECIES[Math.floor(rand() * SPECIES.length)])
+    }
+    // water edges: willow-ish flat trees and hedges round the lake and ponds
+    for (const [cx, cz, r] of [[-150, -62, 27], [152, -78, 15.5], [166, -46, 10.5]]) {
+      for (let i = 0; i < r * 1.6; i++) {
+        const a = rand() * P * 2
+        const rr = r + 1.5 + rand() * 6
+        tree(cx + Math.cos(a) * rr, cz + Math.sin(a) * rr, rand() < 0.6 ? 'campustreeflat' : 'campustree', 0.7, 1.2)
+      }
+    }
+    // bushes at the base of every building and along the forecourts; hedges round the courts
+    for (const pl of placed) {
+      if (pl.name.startsWith('castle') || pl.name === 'badgepillar' || pl.name === 'castlebanner' || pl.name === 'pier' || pl.name === 'footbridge' || pl.name === 'sailboat' || pl.name === 'rowboat') continue
+      const hw = (pl.box.max.x - pl.box.min.x) / 2 + 0.9
+      const hd = (pl.box.max.z - pl.box.min.z) / 2 + 0.9
+      const n = 3 + Math.floor(rand() * 5)
+      for (let i = 0; i < n; i++) {
+        const side = Math.floor(rand() * 4)
+        const t = (rand() - 0.5) * 2
+        const x = pl.x + (side === 0 ? -hw : side === 1 ? hw : t * hw)
+        const z = pl.z + (side === 2 ? -hd : side === 3 ? hd : t * hd)
+        if (nearRoad(x, z) || !inIsland(x, z)) continue
+        stamp('hedgestraight', x, z, rand() * P, 0.45 + rand() * 0.5)
+      }
+    }
+    // flower beds on the plaza lawns and at the district gates
+    for (let i = 0; i < 24; i++) {
+      const a = (i / 24) * P * 2 + P / 48
+      const r = i % 2 ? 27 : 38
+      stamp('hedgering', Math.sin(a) * r, Math.cos(a) * r, a, 0.45)
+    }
+    for (const [, c] of castles) {
+      for (let i = 0; i < 6; i++) {
+        const ax = (i - 2.5) * 5
+        const px = c.x + Math.sin(c.ry) * 9 + Math.cos(c.ry) * ax
+        const pz = c.z + Math.cos(c.ry) * 9 - Math.sin(c.ry) * ax
+        stamp('hedgering', px, pz, 0, 0.4)
+      }
+    }
+    // hedgerows along the outer roads, broken by gaps
+    for (const rz of ROADS_H) for (let x = -EXTENT.x; x <= EXTENT.x; x += 1.02) {
+      if (Math.abs(x) < 8 || rand() < 0.12) continue
+      if (Math.floor((x + 400) / 30) % 3 === 0) continue
+      stamp('hedgestraight', x, rz + (rz > 0 ? 1 : -1) * (ROAD_W / 2 + 1.4), 0, 0.6)
+    }
+    console.log('[campus] planted', planted, 'trees in groves and singles')
+  }
+
   // ── commit the flats and the instances ─────────────────────────────────────────────
   mergeByColor(flats, flatMat, group)
   const instanceMeshes = []
@@ -564,7 +815,23 @@ export function buildCampus(scene, { shadows = true, detail = 'medium' } = {}) {
   }
 
   const gate = { x: 0, z: 92 }
+  const landmarks = [
+    { id: 'greathall', name: 'The Great Hall', x: 0, y: 10, z: -31, kind: 'hall' },
+    { id: 'amphitheater', name: 'The Amphitheater', x: 0, y: 5, z: 27, kind: 'amphitheater' },
+    { id: 'mentorshall', name: 'Hall of Mentors', x: 0, y: 8, z: -78, kind: 'mentors' },
+    { id: 'library', name: 'The Library', x: -30, y: 8, z: -78, kind: 'library' },
+    { id: 'observatory', name: 'The Observatory', x: 30, y: 7, z: -78, kind: 'observatory' },
+    { id: 'gate', name: 'Welcome Gate', x: 0, y: 8, z: 96, kind: 'gate' },
+    { id: 'lake', name: 'The Lake', x: -150, y: 3, z: -62, kind: 'place' },
+    { id: 'harbour', name: 'The Harbour', x: 0, y: 3, z: 121, kind: 'place' },
+    { id: 'gardens', name: 'The Gardens', x: 0, y: 3, z: 84, kind: 'place' },
+    { id: 'market', name: 'The Market', x: 0, y: 5, z: 66, kind: 'place' },
+    { id: 'pitches', name: 'Playing Fields', x: 150, y: 3, z: 54, kind: 'place' },
+    { id: 'maze', name: 'The Maze', x: 108, y: 3, z: -64, kind: 'place' },
+  ]
+  for (const [id, c] of castles) landmarks.push({ id, name: `Castle of ${c.castle.short}`, x: c.x, y: 13, z: c.z, kind: 'castle', accent: c.castle.accent })
   return {
+    landmarks,
     group,
     obstacles,
     pickables,
