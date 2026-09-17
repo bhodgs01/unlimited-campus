@@ -52,12 +52,15 @@ const server = http.createServer(async (req, res) => {
       })
       req.on('end', () => {
         let pw = ''
+        let user = ''
         try {
-          pw = JSON.parse(body || '{}').password
+          const parsed = JSON.parse(body || '{}')
+          pw = parsed.password
+          user = parsed.username
         } catch {
           /* bad body */
         }
-        if (checkPassword(pw)) {
+        if (checkPassword(pw, user)) {
           res.writeHead(200, { 'Content-Type': 'application/json', 'Set-Cookie': makeSetCookie(), 'Cache-Control': 'no-store' }).end('{"ok":true}')
         } else {
           res.writeHead(401, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end('{"ok":false}')

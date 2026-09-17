@@ -1,13 +1,14 @@
 /**
  * Same-origin password gate (the Bot Farm pattern).
  *
- * One shared password (CAMPUS_PASSWORD), checked here, sets an HMAC-signed cookie on this
- * origin. Only the public hosts in CAMPUS_AUTH_HOSTS are gated; localhost never is. If no
+ * One shared login (CAMPUS_USERNAME, optional, and CAMPUS_PASSWORD), checked here, sets an
+ * HMAC-signed cookie on this origin. Changing either signs everyone out. Only the public hosts in CAMPUS_AUTH_HOSTS are gated; localhost never is. If no
  * password is configured the gate is OFF, so a missing secret never locks anyone out.
  */
 import crypto from 'node:crypto'
 
 const PASSWORD = process.env.CAMPUS_PASSWORD || ''
+const USERNAME = process.env.CAMPUS_USERNAME || ''
 const AUTH_HOSTS = (process.env.CAMPUS_AUTH_HOSTS || 'unlimitedcampus.kcproto.com')
   .split(',')
   .map((s) => s.trim().toLowerCase())
@@ -25,7 +26,7 @@ export function needsAuth(host) {
 }
 
 function sign(expiry) {
-  return crypto.createHmac('sha256', PASSWORD).update(String(expiry)).digest('base64url')
+  return crypto.createHmac('sha256', `${USERNAME}:${PASSWORD}`).update(String(expiry)).digest('base64url')
 }
 
 function eq(a, b) {
@@ -44,8 +45,10 @@ export function hasValidAuth(req) {
   return eq(sig, sign(expiry))
 }
 
-export function checkPassword(pw) {
-  return Boolean(PASSWORD) && eq(pw, PASSWORD)
+export function checkPassword(pw, user = '') {
+  // usernames are not case sensitive; passwords are
+  const userOk = !USERNAME || eq(String(user || '').trim().toLowerCase(), USERNAME.toLowerCase())
+  return Boolean(PASSWORD) && eq(pw, PASSWORD) && userOk
 }
 
 export function makeSetCookie() {
@@ -70,16 +73,17 @@ export function loginPage({ error = false } = {}) {
 </style></head><body>
   <form id="f">
     <h1>Unlimited Campus</h1>
-    <p>Enter the password to walk the campus.</p>
-    <input id="pw" type="password" autocomplete="current-password" placeholder="Password" autofocus>
-    <div class="err" id="e">${error ? 'Wrong password. Try again.' : ''}</div>
+    <p>Sign in to walk the campus.</p>
+    ${USERNAME ? '<input id="user" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Username" autofocus>' : ''}
+    <input id="pw" type="password" autocomplete="current-password" placeholder="Password"${USERNAME ? '' : ' autofocus'}>
+    <div class="err" id="e">${error ? 'Wrong username or password. Try again.' : ''}</div>
     <button type="submit">Enter</button>
   </form>
   <script>
-    const f=document.getElementById('f'),pw=document.getElementById('pw'),e=document.getElementById('e');
+    const f=document.getElementById('f'),pw=document.getElementById('pw'),user=document.getElementById('user'),e=document.getElementById('e');
     f.addEventListener('submit',async(ev)=>{ev.preventDefault();e.textContent='';
-      try{const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw.value})});
-        if(r.ok){location.replace('/');}else{e.textContent='Wrong password. Try again.';pw.value='';pw.focus();}
+      try{const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:user?user.value:'',password:pw.value})});
+        if(r.ok){location.replace('/');}else{e.textContent=user?'Wrong username or password. Try again.':'Wrong password. Try again.';pw.value='';pw.focus();}
       }catch(_){e.textContent='Could not reach the server. Try again.';}
     });
   </script>
