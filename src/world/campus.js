@@ -16,6 +16,8 @@ import * as THREE from 'three'
 import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
 import { build, hashStr, mulberry32 } from './pieces.js'
 import { CASTLES } from '../data/castles.js'
+import { BADGE_ART, CASTLE_ART } from '../data/art.js'
+import { artTexture } from './badgeMoment.js'
 
 const P = Math.PI
 const Y_ROAD = 0.03
@@ -249,6 +251,50 @@ function ribbon(points, halfW, color, y) {
   return g
 }
 
+/**
+ * Merge a piece's meshes by material in the piece's own space, leaving anything that moves
+ * (spinners and posed groups) untouched. The root stays, so picking and placement still work.
+ */
+const matKey = (m) => [m.type, m.color?.getHexString(), m.emissive?.getHexString(), m.emissiveIntensity, m.opacity, m.transparent, m.roughness, m.metalness, m.side, m.map?.uuid || '', m.visible].join('|')
+function bakeGeometry(o, matrix) {
+  let g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone()
+  for (const name of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(name)) g.deleteAttribute(name)
+  if (!g.attributes.normal) g.computeVertexNormals()
+  if (!g.attributes.uv) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2))
+  g.morphAttributes = {}
+  g.clearGroups()
+  g.applyMatrix4(matrix)
+  return g
+}
+export function mergeLocal(root, built = null) {
+  const keep = new Set()
+  for (const sp of built?.spinners || []) keep.add(sp.mesh)
+  if (built?.meta?.loop) for (const [name, part] of Object.entries(built.parts || {})) if (name !== 'footprint') part.traverse((o) => o.isMesh && keep.add(o))
+  root.updateMatrixWorld(true)
+  const inv = root.matrixWorld.clone().invert()
+  const byKey = new Map()
+  const victims = []
+  root.traverse((o) => {
+    if (!o.isMesh || keep.has(o) || Array.isArray(o.material) || o.isInstancedMesh || o.isSkinnedMesh) return
+    const m = new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld)
+    const key = matKey(o.material)
+    if (!byKey.has(key)) byKey.set(key, { material: o.material, geos: [], cast: o.castShadow })
+    byKey.get(key).geos.push(bakeGeometry(o, m))
+    victims.push(o)
+  })
+  if (victims.length < 2) return 0
+  for (const o of victims) o.parent.remove(o)
+  for (const { material, geos, cast } of byKey.values()) {
+    const merged = geos.length === 1 ? geos[0] : BufferGeometryUtils.mergeGeometries(geos, false)
+    if (!merged) continue
+    const mesh = new THREE.Mesh(merged, material)
+    mesh.castShadow = cast && !material.transparent
+    mesh.receiveShadow = true
+    root.add(mesh)
+  }
+  return victims.length - byKey.size
+}
+
 // ── the plan ──────────────────────────────────────────────────────────────────────────
 /**
  * Build the campus into `scene`. Order matters: water first, then roads (which break for the
@@ -256,7 +302,10 @@ function ribbon(points, halfW, color, y) {
  * paving, in water or on another building), then the planting, which is filtered last against
  * all of it so nothing grows out of concrete or water.
  */
-export function buildCampus(scene, { shadows = true } = {}) {
+export function buildCampus(scene, { shadows = true, lite = false, merge = true } = {}) {
+  // lite: a headset build (Quest). Same plan, a third of the planting, fewer ships, no art plates.
+  const LITE = lite
+  const D = (n) => Math.round(LITE ? n * 0.2 : n)
   const group = new THREE.Group()
   group.name = 'campus'
   scene.add(group)
@@ -275,6 +324,8 @@ export function buildCampus(scene, { shadows = true } = {}) {
   const spots = { plaza: [], grounds: [] }
   const castles = new Map()
   const landmarks = []
+  const kiosks = new Map()
+  const kioskPlates = []
   let placedCount = 0
   const F = (g) => {
     flats.push(g)
@@ -473,6 +524,61 @@ export function buildCampus(scene, { shadows = true } = {}) {
     return b
   }
 
+  /** A framed picture on two posts: a painting (image path) or a canvas texture. */
+  const billboard = (image, w, h, x, z, ry, accent = '#E501FF') => {
+    const g = new THREE.Group()
+    const dark = new THREE.MeshStandardMaterial({ color: 0x202020, roughness: 0.6, metalness: 0.2 })
+    const lift = 3.2
+    for (const s of [-1, 1]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.35, lift + h + 0.6, 0.35), dark)
+      post.position.set(s * (w / 2 - 0.4), (lift + h + 0.6) / 2, -0.25)
+      post.castShadow = true
+      g.add(post)
+    }
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(w + 0.5, h + 0.5, 0.3), dark)
+    frame.position.set(0, lift + h / 2, -0.1)
+    frame.castShadow = true
+    g.add(frame)
+    const map = typeof image === 'string' ? artTexture(image) : image
+    const pic = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map, toneMapped: true }))
+    pic.position.set(0, lift + h / 2, 0.07)
+    g.add(pic)
+    const strip = new THREE.Mesh(new THREE.BoxGeometry(w + 0.5, 0.16, 0.34), new THREE.MeshStandardMaterial({ color: accent, emissive: new THREE.Color(accent), emissiveIntensity: 0.9 }))
+    strip.position.set(0, lift - 0.2, -0.1)
+    g.add(strip)
+    g.position.set(x, 0, z)
+    g.rotation.y = ry
+    return g
+  }
+  const mentorWall = (title, lines) => {
+    const cv = document.createElement('canvas')
+    cv.width = 1024
+    cv.height = 640
+    const ctx = cv.getContext('2d')
+    const grad = ctx.createLinearGradient(0, 0, 0, 640)
+    grad.addColorStop(0, '#26122e')
+    grad.addColorStop(1, '#141414')
+    ctx.fillStyle = grad
+    ctx.fillRect(0, 0, 1024, 640)
+    ctx.fillStyle = '#E501FF'
+    ctx.fillRect(48, 52, 10, 70)
+    ctx.fillStyle = '#ffffff'
+    ctx.font = 'bold 54px Helvetica, Arial, sans-serif'
+    ctx.fillText(title, 78, 108)
+    ctx.font = '400 29px "Open Sans", Helvetica, Arial, sans-serif'
+    lines.forEach((l, i) => {
+      ctx.fillStyle = i % 2 ? '#d9d9d9' : '#ffffff'
+      ctx.fillText(l, 58, 180 + i * 44)
+    })
+    ctx.fillStyle = '#AFFF00'
+    ctx.font = 'italic 26px "Open Sans", Helvetica, Arial, sans-serif'
+    ctx.fillText('Mentors from the Unlimited Awesome community', 58, 612)
+    const t = new THREE.CanvasTexture(cv)
+    t.colorSpace = THREE.SRGBColorSpace
+    t.anisotropy = 4
+    return t
+  }
+
   // ── roads: the grid, broken wherever the river runs, with a Brain bridge over each gap ──
   const ROAD_W = 6
   const RX = 183
@@ -598,6 +704,28 @@ export function buildCampus(scene, { shadows = true } = {}) {
   place('observatory', 32, -80, { district: 'plaza', ry: -P / 2, id: 'observatory', tag: 'observatory' })
   placeAny('clocktower', [{ x: -18, z: -66 }, { x: -22, z: -68 }], { district: 'plaza' })
   placeAny('lecturehall', [{ x: 22, z: -67, ry: P }, { x: 44, z: -67, ry: P }], { district: 'plaza' })
+  {
+    const ROLES = [
+      ["190+ World-Class Mentors", ["World's First Chief AI Officer @ IBM", 'Former CEO of Blockbuster & 7-Eleven', 'Founder of Atari & Chuck E Cheese', 'Former Head of Innovation @ Nike', 'Former Global CTO @ Lenovo', 'Professor @ Harvard Medical School', 'Inventor of VOIP & Siri', 'Grandfather of Virtual Reality', 'Former GM of Epic Games']],
+      ['Builders, Founders, Scientists', ['CEO of Unanimous AI', 'Former Head of Sales @ Facebook (now Meta)', 'IEEE Executive, Learning Technology Standards', 'Former Head of MIT Reality Hack', 'Founder of Digital Media Zone', 'Global Microsoft Retail Startups Lead', 'Data Centre & Quantum Engineer', 'Director/Producer, Hollywood', '#1 Futurist in the world']],
+    ]
+    ROLES.forEach(([title, lines], i) => {
+      const s = i === 0 ? -1 : 1
+      for (const x of [s * 13, s * 12, s * 14]) {
+        const board = billboard(mentorWall(title, lines), 7.2, 4.5, x, -76, 0, i === 0 ? '#E501FF' : '#AFFF00')
+        board.updateMatrixWorld(true)
+        const box = new THREE.Box3().setFromObject(board)
+        if (boxHitsSolids(box, 0.2) || boxHitsRects(box, 0.2)) continue
+        group.add(board)
+        solids.push(box)
+        board.userData.id = 'mentorshall'
+        board.userData.tag = 'mentors'
+        pickables.push(board)
+        placed.push({ name: 'billboard', built: { root: board, animated: false }, x, z: -76, ry: 0, box })
+        break
+      }
+    })
+  }
   place('sundial', -46, -64, { district: 'grounds', solid: false })
   place('statueplinth', 48, -64, { district: 'grounds', solid: false })
   for (let i = 0; i < 20; i++) spots.grounds.push({ x: -36 + (i % 10) * 8, z: i < 10 ? -70 : -93 })
@@ -748,7 +876,23 @@ export function buildCampus(scene, { shadows = true } = {}) {
       const px = pose.x + fx * (fore + 3) + Math.cos(pose.ry) * ax
       const pz = pose.z + fz * (fore + 3) - Math.sin(pose.ry) * ax
       const kiosk = place('badgepillar', px, pz, { district: castle.id, ry: pose.ry, palette: { ACCENT2: castle.accent }, id: `${castle.id}:${castle.badges[i]}`, tag: 'badge', clearance: 0.3, seed: hashStr(castle.badges[i]), solid: false })
-      if (kiosk) pickables.push(kiosk.root)
+      if (kiosk) {
+        pickables.push(kiosk.root)
+        const badge = castle.badges[i]
+        const art = BADGE_ART[badge]
+        let plate = null
+        if (art && !LITE) {
+          const mat = new THREE.MeshBasicMaterial({ map: artTexture(art.replace('badges/', 'badges/thumb/')), transparent: true, alphaTest: 0.08, side: THREE.DoubleSide, toneMapped: true })
+          plate = new THREE.Mesh(new THREE.PlaneGeometry(1.25, 1.25), mat)
+          plate.position.set(px, 4.1, pz)
+          plate.userData.id = `${castle.id}:${badge}`
+          plate.userData.tag = 'badge'
+          group.add(plate)
+          pickables.push(plate)
+          kioskPlates.push(plate)
+        }
+        kiosks.set(`${castle.id}:${badge}`, { x: px, z: pz, badge, art, castle: castle.id, accent: castle.accent, plate, root: kiosk.root })
+      }
     }
     for (const s of [-1, 1]) {
       place('castlebanner', pose.x + fx * (fore - 4) + Math.cos(pose.ry) * s * 13, pose.z + fz * (fore - 4) - Math.sin(pose.ry) * s * 13, { district: castle.id, ry: pose.ry, solid: false })
@@ -764,6 +908,26 @@ export function buildCampus(scene, { shadows = true } = {}) {
       for (const s of slots) {
         const ry = Math.round(Math.atan2(cx - s.x, cz - s.z) / (P / 2)) * (P / 2)
         if (place(name, s.x, s.z, { district: castle.id, ry, seed: hashStr(`${castle.id}:${name}`), pad: 0.2 })) break
+      }
+    }
+    // the castle's own painting from unlimitedawesome.com, framed on a billboard beside the forecourt
+    if (CASTLE_ART[castle.id]) {
+      const tries = []
+      for (const lat of [20, -20, 24, -24, 17, -17]) for (const fwd of [fore + 4, fore - 2, fore + 9]) tries.push({ lat, fwd })
+      for (const tr of tries) {
+        const bx = pose.x + fx * tr.fwd + Math.cos(pose.ry) * tr.lat
+        const bz = pose.z + fz * tr.fwd - Math.sin(pose.ry) * tr.lat
+        const board = billboard(CASTLE_ART[castle.id], 8, 4.5, bx, bz, pose.ry, castle.accent)
+        board.updateMatrixWorld(true)
+        const box = new THREE.Box3().setFromObject(board)
+        if (boxHitsRects(box, 0.3) || boxHitsSolids(box, 0.3) || boxHitsWater(box, 0.3)) continue
+        group.add(board)
+        solids.push(box)
+        board.userData.id = castle.id
+        board.userData.tag = 'castle'
+        pickables.push(board)
+        placed.push({ name: 'billboard', built: { root: board, animated: false }, x: bx, z: bz, ry: pose.ry, box })
+        break
       }
     }
     for (const name of ['noticeboard', 'phonebooth', 'bikerack', 'parkbench', 'parkbench']) {
@@ -1050,12 +1214,13 @@ export function buildCampus(scene, { shadows = true } = {}) {
       b.root.userData.alongZ = size.z > size.x
       b.root.userData.piece = name
       group.add(b.root)
+      if (merge) mergeLocal(b.root, b)
       if (b.animated) animated.push(b)
       vessels.push({ b, r, offset, phase: offset * 1.7, ...extra })
     }
     // river traffic: small, low boats that clear the bridges
     const RIVER_BOATS = [['canoe', 'brain', 1.7 * 1.1], ['rowboat', 'grounds', 1.7 * 1.5], ['dinghy', 'brain', 1.7 * 0.9], ['canoe', 'brain', 1.7 * 1.1], ['tender', 'brain', 1.7 * 0.8]]
-    RIVER_BOATS.forEach(([name, district, scale], i) => vessel(name, district, scale, riverLoop, (riverLoop.total / RIVER_BOATS.length) * i))
+    ;(LITE ? RIVER_BOATS.slice(0, 3) : RIVER_BOATS).forEach(([name, district, scale], i, list) => vessel(name, district, scale, riverLoop, (riverLoop.total / list.length) * i))
     // the sea lanes: each ship on its own ring round the island, some clockwise
     const SEA_SHIPS = [
       ['tallship', 'brain', 3.2, 46, 4.2, 1],
@@ -1073,7 +1238,7 @@ export function buildCampus(scene, { shadows = true } = {}) {
       ['sailboat', 'grounds', 2.4, 58, 3.3, 1],
       ['tallship', 'brain', 3.0, 126, 4.4, -1],
     ]
-    SEA_SHIPS.forEach(([name, district, scale, dist, speed, dir], i) => {
+    ;(LITE ? SEA_SHIPS.slice(0, 6) : SEA_SHIPS).forEach(([name, district, scale, dist, speed, dir], i) => {
       const pts = []
       for (let k = 0; k <= 160; k++) pts.push(rimPoint((dir * k * P * 2) / 160, -dist))
       const ring = route([pathLeg(pts, speed, SEA_Y)])
@@ -1136,8 +1301,9 @@ export function buildCampus(scene, { shadows = true } = {}) {
   {
     const rand = mulberry32(0x9e1d)
     const pick = (list) => list[Math.floor(rand() * list.length)]
-    const LAWN_TREES = ['oaktree', 'oaktree', 'oaktree', 'oaktree', 'birchtree', 'birchtree', 'cherrytree', 'autumntree', 'campustree', 'pinetree']
-    const BELT_TREES = ['pinetree', 'pinetree', 'pinetree', 'oaktree', 'oaktree', 'birchtree', 'autumntree']
+    // a headset gets the cheap silhouettes: a pine is a quarter of an oak's triangles
+    const LAWN_TREES = LITE ? ['pinetree', 'pinetree', 'birchtree', 'cypresstree'] : ['oaktree', 'oaktree', 'oaktree', 'oaktree', 'birchtree', 'birchtree', 'cherrytree', 'autumntree', 'campustree', 'pinetree']
+    const BELT_TREES = LITE ? ['pinetree'] : ['pinetree', 'pinetree', 'pinetree', 'oaktree', 'oaktree', 'birchtree', 'autumntree']
     const BUSHES = ['bushround', 'bushwide', 'bushflower', 'bushround']
     let planted = 0
     const cellSize = 3
@@ -1157,7 +1323,7 @@ export function buildCampus(scene, { shadows = true } = {}) {
       planted++
       return true
     }
-    for (let i = 0; i < 16000; i++) {
+    for (let i = 0; i < D(16000); i++) {
       const t = rand() * P * 2
       const p = rimPoint(t, 5 + Math.pow(rand(), 1.3) * 44)
       if (Math.abs(p.x) < RX + 4 && Math.abs(p.z) < RZ + 4) continue
@@ -1167,7 +1333,7 @@ export function buildCampus(scene, { shadows = true } = {}) {
       const p = rimPoint(rand() * P * 2, 12 + rand() * 25)
       if (clear(p.x, p.z, 1.5)) stamp(rand() < 0.5 ? 'logpile' : 'treestump', p.x, p.z, rand() * P * 2, 1)
     }
-    for (let g = 0; g < 700; g++) {
+    for (let g = 0; g < D(700); g++) {
       const gx = (rand() - 0.5) * 2 * RX
       const gz = (rand() - 0.5) * 2 * RZ
       if (!clear(gx, gz, 3)) continue
@@ -1188,7 +1354,7 @@ export function buildCampus(scene, { shadows = true } = {}) {
         }
       }
     }
-    for (let i = 0; i < 7000; i++) {
+    for (let i = 0; i < D(7000); i++) {
       const x = (rand() - 0.5) * 2 * (RX + 20)
       const z = (rand() - 0.5) * 2 * (RZ + 20)
       if (tree(x, z, pick(LAWN_TREES)) && rand() < 0.3) tree(x + 2.5 + rand() * 2, z + (rand() - 0.5) * 3, pick(LAWN_TREES))
@@ -1216,7 +1382,7 @@ export function buildCampus(scene, { shadows = true } = {}) {
         } else tree(x, z, 'willowtree', 0.8, 1.2, 3.5, 0.4)
       }
     }
-    for (const pl of placed) {
+    for (const pl of LITE ? [] : placed) {
       if (/^(castle|badge|flag|buoy|canoe|rowboat|sailboat|tallship|longship|fishing|lamp|park|notice|phone|bike|topiary|markettent|hedgering|suspension|stonearch|truss|plank|rope|arch)/.test(pl.name)) continue
       const b = pl.box
       const n = 4 + Math.floor(rand() * 5)
@@ -1233,7 +1399,7 @@ export function buildCampus(scene, { shadows = true } = {}) {
       const c = CELLS.environmental
       for (let x = c.x0 + 4; x < c.x1 - 4; x += 3.5) for (const z of [c.z1 - 4, c.z1 - 8]) if (clear(x, z, 0.8)) stamp('saplingtree', x, z, 0, 1)
     }
-    for (const rz of [-100, 100]) {
+    for (const rz of LITE ? [] : [-100, 100]) {
       for (let x = -RX; x <= RX; x += 1.02) {
         if (Math.floor((x + 400) / 26) % 3 === 0) continue
         const z = rz + (rz > 0 ? 1 : -1) * (ROAD_W / 2 + 1.5)
@@ -1272,8 +1438,78 @@ export function buildCampus(scene, { shadows = true } = {}) {
   for (const k of Object.keys(spots)) spots[k] = spots[k].filter(standable)
   console.log('[campus] unplaced', [...new Set(rejected)].join(','), '| stamps dropped', dropped)
 
+  // ── merge: every static, unclickable piece collapses into one mesh per material ─────────
+  // The campus has ~300 placed pieces of ~20 parts each; drawn one by one that is thousands of
+  // draw calls, which is what a headset chokes on first. Baked into world space and merged by
+  // material it is a few dozen.
+  let mergeStats = { roots: 0, meshes: 0 }
+  if (merge) {
+    const byKey = new Map()
+    const proxyMat = new THREE.MeshBasicMaterial({ visible: false })
+    const add = (o, matrix) => {
+      const key = matKey(o.material)
+      if (!byKey.has(key)) byKey.set(key, { material: o.material, geos: [], cast: o.castShadow })
+      byKey.get(key).geos.push(bakeGeometry(o, matrix))
+    }
+    for (const pl of placed) {
+      const root = pl.built?.root
+      if (!root || !root.parent || pl.name === 'billboard') continue
+      root.updateMatrixWorld(true)
+      // parts that move stay live; everything else is baked into the shared merge
+      const keep = new Set()
+      for (const sp of pl.built.spinners || []) keep.add(sp.mesh)
+      if (pl.built.meta?.loop) for (const [name, part] of Object.entries(pl.built.parts || {})) if (name !== 'footprint') part.traverse((o) => o.isMesh && keep.add(o))
+      const statics = []
+      let blocked = false
+      root.traverse((o) => {
+        if (o.isSprite || o.isPoints || o.isLine) blocked = true
+        if (o.isMesh && !keep.has(o) && !Array.isArray(o.material) && !o.isInstancedMesh) statics.push(o)
+      })
+      if (blocked || !statics.length) continue
+      const pickIndex = pickables.indexOf(root)
+      if (pickIndex >= 0) {
+        // clicking still works: an invisible box where the piece was
+        const box = new THREE.Box3().setFromObject(root)
+        const size = box.getSize(new THREE.Vector3())
+        const proxy = new THREE.Mesh(new THREE.BoxGeometry(Math.max(size.x, 0.5), Math.max(size.y, 0.5), Math.max(size.z, 0.5)), proxyMat)
+        box.getCenter(proxy.position)
+        proxy.userData.id = root.userData.id
+        proxy.userData.tag = root.userData.tag
+        group.add(proxy)
+        pickables[pickIndex] = proxy
+      }
+      for (const o of statics) {
+        add(o, o.matrixWorld)
+        o.parent.remove(o)
+      }
+      mergeStats.roots++
+      let left = false
+      root.traverse((o) => (left = left || o.isMesh))
+      if (!left) root.parent.remove(root)
+    }
+    for (const { material, geos, cast } of byKey.values()) {
+      const merged = geos.length === 1 ? geos[0] : BufferGeometryUtils.mergeGeometries(geos, false)
+      if (!merged) continue
+      const mesh = new THREE.Mesh(merged, material)
+      mesh.castShadow = cast && !material.transparent
+      mesh.receiveShadow = true
+      mesh.name = 'merged'
+      group.add(mesh)
+      mergeStats.meshes++
+      for (const g of geos) if (g !== merged) g.dispose()
+    }
+    let saved = 0
+    for (const pl of placed) if (pl.name === 'billboard' && pl.built.root.parent) saved += mergeLocal(pl.built.root)
+    console.log('[campus] merged', mergeStats.roots, 'pieces into', mergeStats.meshes, 'meshes')
+  }
+
   const gate = { x: 0, z: 104 }
+  const fireworkSites = [{ x: 0, z: 0 }, { x: 0, z: 0 }, ...[...castles.values()].map((c) => ({ x: c.x, z: c.z })), { x: 0, z: -120 }]
   return {
+    kiosks,
+    kioskPlates,
+    fireworkSites,
+    lite: LITE,
     landmarks,
     group,
     obstacles,
@@ -1282,9 +1518,11 @@ export function buildCampus(scene, { shadows = true } = {}) {
     spots,
     gate,
     placed,
-    stats: { placed: placedCount, instanced: [...instances.values()].reduce((n, t) => n + t.length, 0), animated: animated.length, flats: flats.length, rejected: rejected.length },
-    tick(dt) {
+    stats: { placed: placedCount, instanced: [...instances.values()].reduce((n, t) => n + t.length, 0), animated: animated.length, flats: flats.length, rejected: rejected.length, merged: mergeStats.roots, mergedMeshes: mergeStats.meshes },
+    tick(dt, camera) {
       for (const b of animated) b.tick(dt)
+      // the art plates over the kiosks turn slowly to face whoever is looking
+      if (camera) for (const pl of kioskPlates) pl.rotation.y = Math.atan2(camera.position.x - pl.position.x, camera.position.z - pl.position.z)
     },
     groundAt() {
       return 0

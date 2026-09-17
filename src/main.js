@@ -10,7 +10,10 @@ import { crewRig, loadCrew } from './agents/crew.js'
 import { buildCampus, DISTRICTS } from './world/campus.js'
 import { setNight } from './world/pieces.js'
 import { buildMark } from './world/mark.js'
-import { CASTLES, castleById, MENTORS, BRAND } from './data/castles.js'
+import { CASTLES, castleById, MENTOR_ROLES, BRAND } from './data/castles.js'
+import { BADGE_ART, CASTLE_ART } from './data/art.js'
+import { BadgeMoments } from './world/badgeMoment.js'
+import { Fireworks } from './world/fireworks.js'
 import { Hud } from './ui/hud.js'
 import { installVr } from './vr.js'
 import { People } from './agents/people.js'
@@ -36,6 +39,10 @@ app.insertAdjacentHTML(
 
 const settings = new Settings()
 if (!hasStoredSettings()) settings.applyPreset(DEFAULT_PRESET)
+const params = new URLSearchParams(location.search)
+/** A headset (or ?lite=1): a third of the planting, a smaller crowd, no shadows or post. Not saved. */
+const LITE = params.has('lite') || /OculusBrowser|Quest|Pico|MobileVR/i.test(navigator.userAgent)
+if (LITE) Object.assign(settings.values, { shadows: 'off', bloom: false, antialias: false, tiltShift: false, renderScale: 0.85, ibl: false, stars: false, maxAgents: 160, autoQuality: false })
 
 const engine = new Engine(settings).mount(app)
 engine.camera.far = 1200
@@ -67,13 +74,13 @@ setNight(0)
 
 // ── the campus ──────────────────────────────────────────────────────────────────────────
 const shadows = settings.shadowSize > 0
-const campus = buildCampus(engine.scene, { shadows })
+const campus = buildCampus(engine.scene, { shadows, lite: LITE, merge: !params.has('nomerge') })
 console.log('[campus]', campus.stats)
 
 const nav = new Navigation()
 nav.rebuild(campus.obstacles)
 
-if (settings.get('maxAgents') < 420) settings.set('maxAgents', 420)
+if (!LITE && settings.get('maxAgents') < 420) settings.set('maxAgents', 420)
 const astronauts = new Astronauts(engine.scene, settings)
 astronauts.setNavigation(nav)
 const world = { shipDoor: () => new THREE.Vector3(campus.gate.x, 0, campus.gate.z), groundAt: () => 0 }
@@ -99,17 +106,17 @@ function student(castleId, spot) {
 }
 for (const c of CASTLES) {
   const spots = campus.spots[c.id] || []
-  for (let i = 0; i < 34 && spots.length; i++) roster.push(student(c.id, spots[(i * 7) % spots.length]))
+  for (let i = 0; i < (LITE ? 6 : 34) && spots.length; i++) roster.push(student(c.id, spots[(i * 7) % spots.length]))
 }
-for (let i = 0; i < 70; i++) roster.push(student(null, campus.spots.plaza[(i * 3) % campus.spots.plaza.length]))
-for (let i = 0; i < 110; i++) roster.push(student(null, campus.spots.grounds[(i * 5) % campus.spots.grounds.length]))
+for (let i = 0; i < (LITE ? 12 : 70); i++) roster.push(student(null, campus.spots.plaza[(i * 3) % campus.spots.plaza.length]))
+for (let i = 0; i < (LITE ? 16 : 110); i++) roster.push(student(null, campus.spots.grounds[(i * 5) % campus.spots.grounds.length]))
 // mentors around the Hall of Mentors, the tutor pacing the Great Hall steps
 for (let i = 0; i < 12; i++) {
   const a = (i / 12) * Math.PI * 2
   roster.push({
     id: `m${i}`,
     kind: 'mentor',
-    thread: { title: MENTORS[i] || `Mentor ${i + 1}`, intro: 'One of 190 world-class mentors.' },
+    thread: { title: MENTOR_ROLES[i]?.name || MENTOR_ROLES[i]?.role || `Mentor ${i + 1}`, intro: MENTOR_ROLES[i]?.name ? `${MENTOR_ROLES[i].role}. One of 190+ world-class mentors.` : 'One of 190+ world-class mentors in the Unlimited Awesome community.' },
     status: 'info',
     site: new THREE.Vector3(Math.cos(a) * 11, 0, -82 + Math.sin(a) * 11),
     atPost: true,
@@ -221,6 +228,7 @@ function cardFor(hit) {
     const c = castleById(id)
     return {
       kicker: 'Castle',
+      image: CASTLE_ART[c.id] ? `${import.meta.env.BASE_URL}${CASTLE_ART[c.id]}` : undefined,
       title: `Castle of ${c.name}`,
       text: c.blurb,
       accent: c.accent,
@@ -231,7 +239,17 @@ function cardFor(hit) {
   if (hit.tag === 'badge') {
     const [cid, badge] = String(id).split(':')
     const c = castleById(cid)
-    return { kicker: `${c?.short || ''} badge`, title: badge, text: `One of ${c?.badges.length || ''} badges in the Castle of ${c?.name || ''}. Earn it and this kiosk lights up.`, accent: c?.accent, badges: [{ name: 'Not yet earned', lit: false }] }
+    const has = earned.has(id)
+    return {
+      kicker: has ? 'Badge earned' : `${c?.short || ''} badge`,
+      image: BADGE_ART[badge] ? `${import.meta.env.BASE_URL}${BADGE_ART[badge]}` : undefined,
+      square: true,
+      title: badge,
+      text: `One of ${c?.badges.length || ''} verifiable badges in the Castle of ${c?.name || ''}.`,
+      accent: c?.accent,
+      badges: [{ name: has ? 'Earned' : 'Not yet earned', lit: has, color: c?.accent }],
+      actions: [{ label: has ? 'Replay the moment' : 'Earn it', fn: () => playBadge(id), primary: true }],
+    }
   }
   if (hit.tag === 'school' || hit.kind === 'school') {
     const sid = String(id).replace('school:', '')
@@ -302,6 +320,10 @@ engine.canvas.addEventListener('pointerup', (e) => {
     while (o && !o.userData.id && o.parent) o = o.parent
     if (o?.userData.tag === 'school') {
       openSchool(String(o.userData.id).replace('school:', ''))
+      return
+    }
+    if (o?.userData.tag === 'badge') {
+      playBadge(o.userData.id)
       return
     }
     if (o?.userData.id) {
@@ -384,6 +406,32 @@ const labels = (() => {
   return { update, toggle: (on) => { visible = on ?? !visible } }
 })()
 
+// ── the badge moment, earned badges, and fireworks after dark ────────────────────────────
+const badgeMoments = new BadgeMoments(engine.scene)
+const EARNED_KEY = 'unlimitedcampus.earned.v1'
+let earned = new Set()
+try {
+  earned = new Set(JSON.parse(localStorage.getItem(EARNED_KEY) || '[]'))
+} catch {}
+function showEarned(id) {
+  const k = campus.kiosks.get(id)
+  if (k?.plate) k.plate.scale.setScalar(1.4)
+}
+for (const id of earned) showEarned(id)
+function playBadge(id) {
+  const k = campus.kiosks.get(id)
+  if (!k) return
+  badgeMoments.play({ x: k.x, z: k.z, y: 2.6, art: k.art, accent: k.accent })
+  if (!vr.active) rig.focus(new THREE.Vector3(k.x, 5, k.z), { distance: Math.min(rig.desiredDistance, 26) })
+  earned.add(id)
+  try {
+    localStorage.setItem(EARNED_KEY, JSON.stringify([...earned]))
+  } catch {}
+  showEarned(id)
+  if (!vr.active) setTimeout(() => hud.showCard(cardFor({ kind: 'piece', id, tag: 'badge' })), 1400)
+}
+const fireworks = new Fireworks(engine.scene, { sites: campus.fireworkSites, lite: LITE })
+
 // ── the UA Mark: a white isometric cube over the plaza, turning slowly on its vertical axis ──
 const mark = buildMark({ size: 5.5 })
 mark.position.set(0, 19, 0)
@@ -417,7 +465,7 @@ hud.setPeople(
 )
 
 // ── VR ──────────────────────────────────────────────────────────────────────────────────
-const vr = installVr({ engine, rig, hud, astronauts, campus, cardFor })
+const vr = installVr({ engine, rig, hud, astronauts, campus, cardFor, lite: LITE, onPick: (hit) => { if (hit.tag === 'badge') playBadge(hit.id) } })
 
 // ── the intro: from high above, down onto the plaza ────────────────────────────────────
 let savedHome = null
@@ -487,7 +535,9 @@ engine.add({
     // straight onto the pass: a settings write resizes the drawing buffer, and that blanks a frame
     if (engine.bloomPass) engine.bloomPass.strength = bloomWanted
     if (!vr.active) labels.update()
-    campus.tick(dt)
+    campus.tick(dt, engine.camera)
+    badgeMoments.update(dt, engine.camera)
+    fireworks.update(dt, nightK)
     mark.userData.tick(dt)
     people.update(dt, elapsed)
     if (astronauts.group.visible) {
@@ -530,4 +580,4 @@ boot()
 engine.canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); console.warn('webgl context lost'); hud.toast('Graphics context lost, reloading…', 'err'); setTimeout(() => location.reload(), 1500) })
 
 // handy for probes
-window.__campus = { engine, rig, sky, campus, astronauts, roster, settings, hud, vr, people }
+window.__campus = { engine, rig, sky, campus, astronauts, roster, settings, hud, vr, people, playBadge, fireworks, LITE }

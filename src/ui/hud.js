@@ -38,6 +38,8 @@ const CSS = `
 .uc-card .badge{font-size:12px;padding:4px 9px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.05)}
 .uc-card .badge.lit{border-color:transparent;color:#111;font-weight:600}
 .uc-card .row{display:flex;gap:6px;justify-content:flex-end}
+.uc-card img.art{display:block;width:100%;border-radius:12px;object-fit:cover;aspect-ratio:16/9;margin:4px 0 2px;border:1px solid var(--line)}
+.uc-card img.art.square{width:132px;height:132px;aspect-ratio:1;object-fit:contain;border:0;margin:0 auto;filter:drop-shadow(0 6px 18px rgba(229,1,255,.35))}
 .uc-card .x{position:absolute;right:10px;top:8px;width:28px;height:28px;min-width:28px;padding:0;border-radius:8px}
 .uc-help{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(420px,calc(100vw - 28px));padding:18px 20px;display:none;flex-direction:column;gap:8px;pointer-events:auto}
 .uc-help.open{display:flex}
@@ -74,7 +76,7 @@ export class Hud {
         <button class="btn" data-act="help" title="Help">${ICON.help}</button>
       </div>
       <div class="panel uc-chips"></div>
-      <div class="panel uc-card"><button class="btn x" data-act="close">✕</button><div class="kicker"></div><h2></h2><p></p><div class="badges"></div><div class="row"></div></div>
+      <div class="panel uc-card"><button class="btn x" data-act="close">✕</button><img class="art" alt="" hidden><div class="kicker"></div><h2></h2><p></p><div class="badges"></div><div class="row"></div></div>
       <div class="panel uc-help">
         <h3>Walking the campus</h3>
         <p><kbd>Drag</kbd> to pan, <kbd>Wheel</kbd> or pinch to zoom, <kbd>Right-drag</kbd> to orbit.</p>
@@ -179,6 +181,12 @@ export class Hud {
   /** card = { kicker, title, text, badges?: [{name, lit, color}], accent, actions?: [{label, fn, primary}] } */
   showCard(card) {
     const c = this.card
+    const img = c.querySelector('img.art')
+    img.hidden = !card.image
+    if (card.image) {
+      img.src = card.image
+      img.classList.toggle('square', Boolean(card.square))
+    }
     c.querySelector('.kicker').textContent = card.kicker || ''
     c.querySelector('h2').textContent = card.title || ''
     c.querySelector('p').textContent = card.text || ''

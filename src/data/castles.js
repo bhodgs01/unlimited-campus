@@ -76,6 +76,21 @@ export const CASTLES = [
 export const castleById = (id) => CASTLES.find((c) => c.id === id) || null
 
 /** A handful of real mentor names from the deck, the rest are numbered until Alan sends the roster. */
+/** Mentor roles from the UA intro deck (Sept 2026). Only Jim Keyes is named in the deck. */
+export const MENTOR_ROLES = [
+  { name: 'Jim Keyes', role: 'Former CEO of Blockbuster & 7-Eleven' },
+  { role: "World's First Chief AI Officer @ IBM" },
+  { role: 'Founder of Atari & Chuck E Cheese' },
+  { role: 'Former Head of Innovation @ Nike' },
+  { role: 'Former Global CTO @ Lenovo' },
+  { role: 'Professor @ Harvard Medical School' },
+  { role: 'Inventor of VOIP & Siri, former Partner @ Kleiner Perkins' },
+  { role: 'Grandfather of Virtual Reality' },
+  { role: 'Former GM of Epic Games' },
+  { role: 'CEO of Unanimous AI' },
+  { role: 'Former Head of Sales @ Facebook (now Meta)' },
+  { role: '#1 Futurist in the world' },
+]
 export const MENTORS = [
   'Jim Keyes', 'Nolan Bushnell', 'Jeremy Bailenson', 'Julie Smithson', 'Alan Smithson', 'Dan Blair', 'Kelly Lovell', 'Mark Hewitt',
 ]

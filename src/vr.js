@@ -16,7 +16,7 @@ const SNAP_TURN = Math.PI / 6
 const REACH = 30
 const NL = String.fromCharCode(10)
 
-export function installVr({ engine, rig, hud, astronauts, campus, cardFor }) {
+export function installVr({ engine, rig, hud, astronauts, campus, cardFor, onPick, lite = false }) {
   const renderer = engine.renderer
   const scene = engine.scene
   const camera = engine.camera
@@ -74,8 +74,11 @@ export function installVr({ engine, rig, hud, astronauts, campus, cardFor }) {
       return
     }
     try {
+      // a headset is fill-rate bound: render a little under native and let foveation soften the edges
+      renderer.xr.setFramebufferScaleFactor(lite ? 0.7 : 0.9)
       const session = await navigator.xr.requestSession('immersive-vr', { optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking'] })
       await renderer.xr.setSession(session)
+      renderer.xr.setFoveation?.(0.5)
     } catch (err) {
       hud.toast?.(`VR would not start: ${err.message}`, 'err')
     }
@@ -84,8 +87,11 @@ export function installVr({ engine, rig, hud, astronauts, campus, cardFor }) {
   renderer.xr.addEventListener('sessionstart', onStart)
   renderer.xr.addEventListener('sessionend', onEnd)
 
+  let hadShadows = false
   function onStart() {
     state.active = true
+    hadShadows = renderer.shadowMap.enabled
+    renderer.shadowMap.enabled = false
     hud.setVrActive?.(true)
     if (state.button) state.button.textContent = 'Leave VR'
     scene.add(player)
@@ -100,6 +106,7 @@ export function installVr({ engine, rig, hud, astronauts, campus, cardFor }) {
 
   function onEnd() {
     state.active = false
+    renderer.shadowMap.enabled = hadShadows
     hud.setVrActive?.(false)
     if (state.button) state.button.textContent = 'Enter VR'
     hideHover()
@@ -155,6 +162,7 @@ export function installVr({ engine, rig, hud, astronauts, campus, cardFor }) {
     hideHelp()
     const hit = under(c)
     if (hit) {
+      onPick?.(hit)
       showPanel(hit)
       pulse(c, 0.5, 40)
     } else hidePanel()
