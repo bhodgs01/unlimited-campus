@@ -12,6 +12,8 @@ import { setNight } from './world/pieces.js'
 import { CASTLES, castleById, MENTORS, BRAND } from './data/castles.js'
 import { Hud } from './ui/hud.js'
 import { installVr } from './vr.js'
+import { People } from './agents/people.js'
+import { PEOPLE } from './agents/family.js'
 
 /**
  * Boot and the frame loop.
@@ -70,6 +72,7 @@ console.log('[campus]', campus.stats)
 const nav = new Navigation()
 nav.rebuild(campus.obstacles)
 
+if (settings.get('maxAgents') < 420) settings.set('maxAgents', 420)
 const astronauts = new Astronauts(engine.scene, settings)
 astronauts.setNavigation(nav)
 const world = { shipDoor: () => new THREE.Vector3(campus.gate.x, 0, campus.gate.z), groundAt: () => 0 }
@@ -95,10 +98,10 @@ function student(castleId, spot) {
 }
 for (const c of CASTLES) {
   const spots = campus.spots[c.id] || []
-  for (let i = 0; i < 10 && i < spots.length; i++) roster.push(student(c.id, spots[(i * 7) % spots.length]))
+  for (let i = 0; i < 34 && spots.length; i++) roster.push(student(c.id, spots[(i * 7) % spots.length]))
 }
-for (let i = 0; i < 14; i++) roster.push(student(null, campus.spots.plaza[(i * 3) % campus.spots.plaza.length]))
-for (let i = 0; i < 12; i++) roster.push(student(null, campus.spots.grounds[(i * 5) % campus.spots.grounds.length]))
+for (let i = 0; i < 70; i++) roster.push(student(null, campus.spots.plaza[(i * 3) % campus.spots.plaza.length]))
+for (let i = 0; i < 110; i++) roster.push(student(null, campus.spots.grounds[(i * 5) % campus.spots.grounds.length]))
 // mentors around the Hall of Mentors, the tutor pacing the Great Hall steps
 for (let i = 0; i < 12; i++) {
   const a = (i / 12) * Math.PI * 2
@@ -107,7 +110,7 @@ for (let i = 0; i < 12; i++) {
     kind: 'mentor',
     thread: { title: MENTORS[i] || `Mentor ${i + 1}`, intro: 'One of 190 world-class mentors.' },
     status: 'info',
-    site: new THREE.Vector3(Math.cos(a) * 11, 0, -78 + Math.sin(a) * 11),
+    site: new THREE.Vector3(Math.cos(a) * 11, 0, -82 + Math.sin(a) * 11),
     atPost: true,
   })
 }
@@ -157,6 +160,9 @@ const hud = new Hud(app, settings, {
   vr: () => vr.toggle?.(),
   flyTo: (id) => flyTo(id),
   cardClosed: () => {
+    following = null
+    rig.follow(null)
+    hud.setActivePerson(null)
     selectedCastle = null
     hud.setActiveChip(null)
     astronauts.setSelected(null)
@@ -235,6 +241,13 @@ function cardFor(hit) {
   return info ? { kicker: 'Campus', title: info[0], text: info[1], accent: BRAND.purple } : null
 }
 
+/** The schools are real worlds in the JARVIS Brain: open the live page. */
+function openSchool(id) {
+  if (!id) return
+  hud.toast(`Opening the School of ${id} in the Brain…`)
+  window.open(`https://brain.kcproto.com/${id}`, '_blank', 'noopener')
+}
+
 // ── picking ─────────────────────────────────────────────────────────────────────────────
 const caster = new THREE.Raycaster()
 const ndc = new THREE.Vector2()
@@ -251,6 +264,11 @@ engine.canvas.addEventListener('pointerup', (e) => {
   const rect = engine.canvas.getBoundingClientRect()
   ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
   ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
+  const person = people.pick(engine.camera, ndc.x, ndc.y, rect.width / rect.height)
+  if (person) {
+    findPerson(person.id)
+    return
+  }
   const agent = astronauts.group.visible ? astronauts.pick(engine.camera, ndc.x, ndc.y, rect.width / rect.height) : null
   if (agent) {
     astronauts.setSelected(agent)
@@ -262,6 +280,10 @@ engine.canvas.addEventListener('pointerup', (e) => {
   if (hits.length) {
     let o = hits[0].object
     while (o && !o.userData.id && o.parent) o = o.parent
+    if (o?.userData.tag === 'school') {
+      openSchool(String(o.userData.id).replace('school:', ''))
+      return
+    }
     if (o?.userData.id) {
       const card = cardFor({ kind: 'piece', id: o.userData.id, tag: o.userData.tag })
       if (card) {
@@ -305,10 +327,8 @@ const labels = (() => {
     el.style.pointerEvents = 'none'
     el.addEventListener('click', () => {
       if (l.kind === 'castle') flyTo(l.id)
-      else if (l.kind === 'school') {
-        rig.focus(new THREE.Vector3(l.x, 0, l.z), { distance: 48 })
-        hud.showCard(cardFor({ kind: 'piece', id: l.id, tag: 'school' }))
-      } else {
+      else if (l.kind === 'school') openSchool(l.school)
+      else {
         rig.focus(new THREE.Vector3(l.x, 0, l.z), { distance: 70 })
         const card = cardFor({ kind: 'piece', id: l.id, tag: l.kind })
         if (card) hud.showCard(card)
@@ -344,6 +364,33 @@ const labels = (() => {
   return { update, toggle: (on) => { visible = on ?? !visible } }
 })()
 
+// ── Blake and Alan: real faces, find-me chips like the Bot Farm ──────────────────────────
+const peopleSpots = [...campus.spots.plaza, ...campus.spots.grounds.slice(0, 80)]
+const people = new People(engine.scene, nav, peopleSpots)
+let following = null
+function findPerson(id) {
+  const p = people.get(id)
+  if (!p) return
+  if (following === id) {
+    following = null
+    rig.follow(null)
+    hud.setActivePerson(null)
+    hud.closeCard()
+    return
+  }
+  following = id
+  rig.follow(() => p.pos)
+  rig.desiredDistance = Math.min(rig.desiredDistance, 24)
+  hud.setActivePerson(id)
+  const info = PEOPLE[id]
+  p.g.userData.setExpression?.('happy')
+  hud.showCard({ kicker: info.role, title: info.name, text: info.intro, accent: id === 'alan' ? BRAND.purple : '#159daf' })
+}
+hud.setPeople(
+  Object.entries(PEOPLE).map(([id, info]) => ({ id, name: info.name.split(' ')[0], face: `${import.meta.env.BASE_URL}family/${id}-neutral.png` })),
+  (id) => findPerson(id)
+)
+
 // ── VR ──────────────────────────────────────────────────────────────────────────────────
 const vr = installVr({ engine, rig, hud, astronauts, campus, cardFor })
 
@@ -367,8 +414,8 @@ if (intro.active) {
 let wanderAt = 6
 function wander(elapsed) {
   if (elapsed < wanderAt) return
-  wanderAt = elapsed + 4
-  for (let k = 0; k < 4; k++) {
+  wanderAt = elapsed + 2.5
+  for (let k = 0; k < 28; k++) {
     const e = roster[Math.floor(Math.random() * roster.length)]
     if (!e || e.kind !== 'student') continue
     const pool = Math.random() < 0.6 && e.castle ? campus.spots[e.castle] : Math.random() < 0.5 ? campus.spots.plaza : campus.spots.grounds
@@ -384,7 +431,6 @@ settings.onChange((changed, scope) => {
   sky.onSettingsChanged?.(changed)
   astronauts.onSettingsChanged?.(changed)
   if (changed.has('timeOfDay')) sky.setTime(settings.get('timeOfDay'))
-setNight(0)
 })
 
 // ── frame loop ──────────────────────────────────────────────────────────────────────────
@@ -413,9 +459,11 @@ engine.add({
     const nightK = 1 - (sky.dayFactor ?? 1)
     setNight(nightK)
     const bloomWanted = Math.round((0.22 + nightK * 0.55) * 100) / 100
-    if (settings.get('bloom') && Math.abs(settings.get('bloomStrength') - bloomWanted) > 0.02) settings.set('bloomStrength', bloomWanted)
+    // straight onto the pass: a settings write resizes the drawing buffer, and that blanks a frame
+    if (engine.bloomPass) engine.bloomPass.strength = bloomWanted
     if (!vr.active) labels.update()
     campus.tick(dt)
+    people.update(dt, elapsed)
     if (astronauts.group.visible) {
       astronauts.update(dt, elapsed)
       astronauts.updateRings?.(elapsed)
@@ -427,6 +475,13 @@ engine.add({
 
 // ── go ──────────────────────────────────────────────────────────────────────────────────
 async function boot() {
+  try {
+    await people.preload()
+    await people.add('alan', { x: 5, z: -8 })
+    await people.add('blake', { x: -5, z: -8 })
+  } catch (err) {
+    console.warn('people failed to load', err)
+  }
   try {
     await loadCrew()
     astronauts.setRig(crewRig())
@@ -449,4 +504,4 @@ boot()
 engine.canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); console.warn('webgl context lost'); hud.toast('Graphics context lost, reloading…', 'err'); setTimeout(() => location.reload(), 1500) })
 
 // handy for probes
-window.__campus = { engine, rig, sky, campus, astronauts, roster, settings, hud, vr }
+window.__campus = { engine, rig, sky, campus, astronauts, roster, settings, hud, vr, people }

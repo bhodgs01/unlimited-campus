@@ -689,6 +689,500 @@ export default function PIECES(THREE, CELL) {
     c.geom(new THREE.SphereGeometry(0.08, 6, 5), CELL.GLOW, { y: 1.42, emissive: 0.9 })
     return { label: 'Market tent', kind: 'landmark' }
   },
-  // END PIECES
+    oaktree(c, rand) {
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const E=(x,y,z,k,o={})=>{const g=new THREE.SphereGeometry(1,8,6);g.scale(x,y,z);c.geom(g,k,o);};
+    const rod=(a,b,r,k,o={})=>{const u=new THREE.Vector3(...a),v=new THREE.Vector3(...b),d=v.clone().sub(u);const q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.clone().normalize());const g=new THREE.CylinderGeometry(r,r,d.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(q));const p=u.add(v).multiplyScalar(.5);c.geom(g,k,{x:p.x,y:p.y,z:p.z,...o});};
+    c.group('footprint',{x:-0.0,z:0.05499998});
+
+    C(.16,1.17,CELL.WOOD,{y:.585},7);for(const s of [-1,1])rod([0,.72,0],[s*.48,1.58,.06],.10,CELL.WOOD);
+    E(.96,.89,.97,CELL.LEAF,{y:1.71});for(const x of [-.55,.55])E(.85,.71,.80,CELL.LEAF,{x,y:1.54});E(.72,.60,.77,CELL.LEAF,{y:1.69,z:-.31});
+    c.end();
+    return {label:"Broad Oak",kind:'landmark'};
+  },
+  pinetree(c, rand) {
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+
+    C(.10,1.05,CELL.WOOD,{y:.525},7);for(const [r,h,y] of [[.70,1.22,1.15],[.54,1.14,1.79],[.35,1.05,2.475]])c.geom(new THREE.ConeGeometry(r,h,8),CELL.LEAF,{y});
+    return {label:"Island Pine",kind:'landmark'};
+  },
+  birchtree(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const E=(x,y,z,k,o={})=>{const g=new THREE.SphereGeometry(1,8,6);g.scale(x,y,z);c.geom(g,k,o);};
+    const rod=(a,b,r,k,o={})=>{const u=new THREE.Vector3(...a),v=new THREE.Vector3(...b),d=v.clone().sub(u);const q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.clone().normalize());const g=new THREE.CylinderGeometry(r,r,d.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(q));const p=u.add(v).multiplyScalar(.5);c.geom(g,k,{x:p.x,y:p.y,z:p.z,...o});};
+
+    C(.055,1.64,CELL.LIGHT,{y:.82},7);E(.55,.94,.47,CELL.LEAF,{y:1.86});rod([0,.98,0],[rand()<.5?-.18:.18,1.58,.08],.03,CELL.LIGHT);
+    for(const y of [.28,.56,.86])B(.08,.035,.025,CELL.STONE_DARK,{y,z:.052});
+    return {label:"Silver Birch",kind:'landmark'};
+  },
+  willowtree(c, rand) {
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const E=(x,y,z,k,o={})=>{const g=new THREE.SphereGeometry(1,8,6);g.scale(x,y,z);c.geom(g,k,o);};
+    const rod=(a,b,r,k,o={})=>{const u=new THREE.Vector3(...a),v=new THREE.Vector3(...b),d=v.clone().sub(u);const q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.clone().normalize());const g=new THREE.CylinderGeometry(r,r,d.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(q));const p=u.add(v).multiplyScalar(.5);c.geom(g,k,{x:p.x,y:p.y,z:p.z,...o});};
+    c.group('footprint',{x:-0.0,z:-0.07});
+
+    rod([0,.10,0],[.16,1.48,-.12],.12,CELL.WOOD);C(.12,.20,CELL.WOOD,{y:.10},7);E(1.10,.49,1.10,CELL.LEAF,{y:1.71});
+    for(let i=0;i<5;i++){const a=i*Math.PI*2/5;c.geom(new THREE.ConeGeometry(.36,1.13,7),CELL.LEAF,{x:.88*Math.sin(a),y:1.19,z:.88*Math.cos(a),rz:Math.PI});}
+    c.end();
+    return {label:"Weeping Willow",kind:'landmark'};
+  },
+  cherrytree(c, rand) {
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const E=(x,y,z,k,o={})=>{const g=new THREE.SphereGeometry(1,8,6);g.scale(x,y,z);c.geom(g,k,o);};
+    const rod=(a,b,r,k,o={})=>{const u=new THREE.Vector3(...a),v=new THREE.Vector3(...b),d=v.clone().sub(u);const q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.clone().normalize());const g=new THREE.CylinderGeometry(r,r,d.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(q));const p=u.add(v).multiplyScalar(.5);c.geom(g,k,{x:p.x,y:p.y,z:p.z,...o});};
+    c.group('footprint',{x:-0.0,z:0.01999999});
+
+    C(.065,.88,CELL.WOOD,{y:.44},7);for(const x of [-.28,.28])rod([0,.51,0],[x,1.10,0],.045,CELL.WOOD);E(.63,.55,.60,CELL.LIGHT,{y:1.35});for(const x of [-.42,.42])E(.48,.47,.49,CELL.LIGHT,{x,y:1.19});E(.24,.22,.24,CELL.LEAF,{y:1.11,z:-.40});
+    c.end();
+    return {label:"Cherry Blossom",kind:'landmark'};
+  },
+  autumntree(c, rand) {
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const E=(x,y,z,k,o={})=>{const g=new THREE.SphereGeometry(1,8,6);g.scale(x,y,z);c.geom(g,k,o);};
+    const rod=(a,b,r,k,o={})=>{const u=new THREE.Vector3(...a),v=new THREE.Vector3(...b),d=v.clone().sub(u);const q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.clone().normalize());const g=new THREE.CylinderGeometry(r,r,d.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(q));const p=u.add(v).multiplyScalar(.5);c.geom(g,k,{x:p.x,y:p.y,z:p.z,...o});};
+
+    C(.115,.98,CELL.WOOD,{y:.49},7);rod([0,.65,0],[.34,1.20,0],.07,CELL.WOOD);E(.82,.73,.78,CELL.ROOF,{y:1.47});for(const x of [-.42,.42])E(.64,.56,.62,CELL.ROOF,{x,y:1.30});
+    return {label:"Autumn Maple",kind:'landmark'};
+  },
+  cypresstree(c, rand) {
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const E=(x,y,z,k,o={})=>{const g=new THREE.SphereGeometry(1,8,6);g.scale(x,y,z);c.geom(g,k,o);};
+
+    C(.065,.66,CELL.WOOD,{y:.33},7);E(.35,1.30,.35,CELL.LEAF,{y:1.9});
+    return {label:"Formal Cypress",kind:'landmark'};
+  },
+  saplingtree(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const E=(x,y,z,k,o={})=>{const g=new THREE.SphereGeometry(1,8,6);g.scale(x,y,z);c.geom(g,k,o);};
+
+    C(.032,.80,CELL.WOOD,{y:.40},6);E(.33,.36,.33,CELL.LEAF,{y:.84});C(.035,.77,CELL.WOOD,{x:.18,y:.385},6);B(.22,.035,.035,CELL.METAL_DARK,{x:.09,y:.60});
+    return {label:"Staked Sapling",kind:'landmark'};
+  },
+  bushround(c, rand) {
+    const E=(x,y,z,k,o={})=>{const g=new THREE.SphereGeometry(1,8,6);g.scale(x,y,z);c.geom(g,k,o);};
+
+    E(.50,.40,.44,CELL.LEAF,{y:.40});for(const x of [-.20,.20])E(.30,.27,.31,CELL.LEAF,{x,y:.27});
+    return {label:"Round Shrub",kind:'landmark'};
+  },
+  bushwide(c, rand) {
+    const E=(x,y,z,k,o={})=>{const g=new THREE.SphereGeometry(1,8,6);g.scale(x,y,z);c.geom(g,k,o);};
+
+    E(.52,.25,.46,CELL.LEAF,{y:.25});for(const x of [-.42,.42])E(.38,.22,.35,CELL.LEAF,{x,y:.22});
+    return {label:"Spreading Shrub",kind:'landmark'};
+  },
+  bushflower(c, rand) {
+    const E=(x,y,z,k,o={})=>{const g=new THREE.SphereGeometry(1,6,4);g.scale(x,y,z);c.geom(g,k,o);};
+
+    E(.44,.36,.44,CELL.LEAF,{y:.36});for(let i=0;i<4;i++){const a=i*Math.PI/2;E(.075,.075,.075,CELL.ACCENT2,{x:.31*Math.sin(a),y:.57,z:.31*Math.cos(a)});}E(.08,.08,.08,CELL.ACCENT2,{y:.72});
+    return {label:"Flowering Shrub",kind:'landmark'};
+  },
+  topiaryball(c, rand) {
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const E=(x,y,z,k,o={})=>{const g=new THREE.SphereGeometry(1,8,6);g.scale(x,y,z);c.geom(g,k,o);};
+
+    C(.045,.44,CELL.WOOD,{y:.22},6);E(.34,.34,.34,CELL.LEAF,{y:.66});
+    return {label:"Ball Topiary",kind:'landmark'};
+  },
+  topiarycone(c, rand) {
+
+
+    c.geom(new THREE.ConeGeometry(.30,1.4,10),CELL.LEAF,{y:.7});
+    return {label:"Cone Topiary",kind:'landmark'};
+  },
+  flowerbed(c, rand) {
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const E=(x,y,z,k,o={})=>{const g=new THREE.SphereGeometry(1,6,4);g.scale(x,y,z);c.geom(g,k,o);};
+
+    C(.80,.055,CELL.EARTH,{y:.0275},12);for(let i=0;i<9;i++){const a=i*Math.PI*2/9;E(.105,.12,.105,i%2?CELL.ACCENT:CELL.ACCENT2,{x:.56*Math.sin(a),y:.17,z:.56*Math.cos(a)});}for(let i=0;i<3;i++){const a=i*Math.PI*2/3;E(.16,.15,.16,CELL.LEAF,{x:.20*Math.sin(a),y:.17,z:.20*Math.cos(a)});}
+    return {label:"Round Flower Bed",kind:'landmark'};
+  },
+  flowerstrip(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const E=(x,y,z,k,o={})=>{const g=new THREE.SphereGeometry(1,6,4);g.scale(x,y,z);c.geom(g,k,o);};
+
+    B(1,.06,.40,CELL.EARTH,{y:.03});for(let i=0;i<5;i++)E(.09,.12,.115,i%2?CELL.LEAF:CELL.ACCENT2,{x:-.40+i*.20,y:.18});
+    return {label:"Flower Border",kind:'landmark'};
+  },
+  rock(c, rand) {
+    const E=(x,y,z,k,o={})=>{const g=new THREE.SphereGeometry(1,8,6);g.scale(x,y,z);c.geom(g,k,o);};
+    c.group('footprint',{x:-0.045,z:-0.02000001});
+
+    E(.47,.40,.38,CELL.STONE_DARK,{y:.40});E(.28,.22,.30,CELL.STONE_DARK,{x:.28,y:.22,z:.12});
+    c.end();
+    return {label:"Boulder",kind:'landmark'};
+  },
+  rockcluster(c, rand) {
+    const E=(x,y,z,k,o={})=>{const g=new THREE.SphereGeometry(1,8,6);g.scale(x,y,z);c.geom(g,k,o);};
+    c.group('footprint',{x:1e-08,z:-0.01500001});
+
+    for(const [x,z,rx,ry,rz] of [[-.45,0,.55,.42,.42],[.55,-.15,.45,.31,.36],[.10,.44,.37,.23,.30],[-.25,-.45,.29,.22,.26]])E(rx,ry,rz,CELL.STONE_DARK,{x,y:ry,z});c.geom(new THREE.ConeGeometry(.14,.32,5),CELL.LEAF,{x:.40,y:.16,z:.40});
+    c.end();
+    return {label:"Rock Cluster",kind:'landmark'};
+  },
+  reedclump(c, rand) {
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const rod=(a,b,r,k,o={})=>{const u=new THREE.Vector3(...a),v=new THREE.Vector3(...b),d=v.clone().sub(u);const q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.clone().normalize());const g=new THREE.CylinderGeometry(r,r,d.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(q));const p=u.add(v).multiplyScalar(.5);c.geom(g,k,{x:p.x,y:p.y,z:p.z,...o});};
+
+    C(.30,.035,CELL.EARTH,{y:.0175},8);for(let i=0;i<8;i++){const a=i*Math.PI/4,r=i%2?.17:.09,h=i%3===0?.97:.72+.08*(i%3);rod([r*Math.sin(a),.035,r*Math.cos(a)],[r*1.40*Math.sin(a),h,r*1.40*Math.cos(a)],.018,CELL.LEAF);}
+    return {label:"Waterside Reeds",kind:'landmark'};
+  },
+  lilypads(c, rand) {
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const E=(x,y,z,k,o={})=>{const g=new THREE.SphereGeometry(1,6,4);g.scale(x,y,z);c.geom(g,k,o);};
+    c.group('footprint',{x:0.00524472,z:0.01});
+
+    for(const [x,z,r] of [[0,0,.24],[-.42,.24,.19],[.40,.30,.20],[.36,-.29,.17],[-.32,-.30,.22]])C(r,.025,CELL.LEAF,{x,y:.0125,z},10);E(.07,.12,.07,CELL.ACCENT2,{x:.03,y:.145});
+    c.end();
+    return {label:"Lily Pads",kind:'landmark'};
+  },
+  treestump(c, rand) {
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    c.group('footprint',{x:-0.0,z:-0.00934765});
+
+    c.geom(new THREE.CylinderGeometry(.25,.31,.37,9),CELL.WOOD,{y:.185});C(.242,.03,CELL.LIGHT,{y:.385},9);
+    c.end();
+    return {label:"Tree Stump",kind:'landmark'};
+  },
+  logpile(c, rand) {
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+
+    for(const [y,z] of [[.14,-.29],[.14,0],[.14,.29],[.38,-.145],[.38,.145],[.56,0]])C(.14,1.4,CELL.WOOD,{y,z,rz:Math.PI/2},8);
+    return {label:"Stacked Logs",kind:'landmark'};
+  },
+  planterbox(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const E=(x,y,z,k,o={})=>{const g=new THREE.SphereGeometry(1,6,4);g.scale(x,y,z);c.geom(g,k,o);};
+
+    B(1,.24,.5,CELL.WOOD,{y:.12});B(.88,.03,.38,CELL.EARTH,{y:.255});for(const x of [-.31,0,.31])E(.16,.20,.17,CELL.LEAF,{x,y:.40});for(const x of [-.23,.23])E(.08,.08,.08,CELL.ACCENT,{x,y:.52,z:.06});
+    return {label:"Wooden Planter",kind:'landmark'};
+  },
+  studentunion(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const P=(pts,d,k,o={})=>{const s=new THREE.Shape();pts.forEach(([x,y],i)=>i?s.lineTo(x,y):s.moveTo(x,y));s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:false,curveSegments:12});g.translate(0,0,-d/2);c.geom(g,k,o);};
+    const roof=(w,d,h,o={})=>P([[-w/2,0],[w/2,0],[0,h]],d,CELL.ROOF,o);
+    const pane=(w,h,o={},lit=false)=>{B(w+.10,h+.10,.055,CELL.STONE_DARK,o);B(w,h,.025,lit?CELL.GLOW:CELL.GLASS,{...o,z:(o.z||0)+Math.cos(o.ry||0)*.035,x:(o.x||0)+Math.sin(o.ry||0)*.035,emissive:lit?.55:0});};
+
+    B(5.4,.1,4.6,CELL.STONE,{y:.05});B(2.25,1.95,3.35,CELL.STONE,{x:-1.3,y:1.075,z:-.35});B(2.1,1.30,3.35,CELL.STONE,{x:.95,y:.75,z:-.35});roof(2.32,3.55,.78,{x:.95,y:1.40,z:-.35});
+    B(2.12,1.63,.035,CELL.GLASS,{x:-1.30,y:1.15,z:1.35});for(const x of [-2.24,-1.77,-1.30,-.83,-.36])B(.035,1.73,.045,CELL.METAL,{x,y:1.15,z:1.39});for(const y of [.64,1.27,1.91])B(2.16,.04,.045,CELL.METAL,{x:-1.30,y,z:1.39});
+    for(const z of [-1.3,-.35,.60])pane(.43,.50,{x:2.01,y:.93,z,ry:Math.PI/2});for(const x of [-1.99,-1.30,-.61,.5,1.4])pane(.38,.48,{x,y:1.03,z:-2.035,ry:Math.PI});
+    B(3.75,.12,.78,CELL.ROOF,{x:-.25,y:1.03,z:1.70});B(3.76,.035,.03,CELL.ACCENT,{x:-.25,y:1.03,z:2.105,emissive:.6});for(const x of [-1.95,1.44])C(.045,.86,CELL.METAL,{x,y:.53,z:1.91});B(.64,.65,.055,CELL.WOOD,{x:-.33,y:.425,z:1.39});pane(.36,.42,{x:.84,y:.83,z:1.35},true);if(rand()<.5)B(.36,.12,.36,CELL.METAL_DARK,{x:-1.7,y:2.11,z:-.8});
+    return {label:"Student Union",kind:'landmark'};
+  },
+  dininghall(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const P=(pts,d,k,o={})=>{const s=new THREE.Shape();pts.forEach(([x,y],i)=>i?s.lineTo(x,y):s.moveTo(x,y));s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:false,curveSegments:12});g.translate(0,0,-d/2);c.geom(g,k,o);};
+    const A=(w,h,t,d,k,o={})=>{const r=w/2,cy=h-r-t,s=new THREE.Shape();s.moveTo(-r-t,0);s.lineTo(-r-t,cy);s.absarc(0,cy,r+t,Math.PI,0,true);s.lineTo(r+t,0);s.lineTo(r,0);s.lineTo(r,cy);s.absarc(0,cy,r,0,Math.PI,false);s.lineTo(-r,0);s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:false,curveSegments:12});g.translate(0,0,-d/2);c.geom(g,k,o);};
+    const roof=(w,d,h,o={})=>P([[-w/2,0],[w/2,0],[0,h]],d,CELL.ROOF,o);
+    const archpane=(w,h,o={})=>{const r=w/2,s=new THREE.Shape();s.moveTo(-r,0);s.lineTo(-r,h-r);s.absarc(0,h-r,r,Math.PI,0,true);s.lineTo(r,0);s.closePath();const a=new THREE.ExtrudeGeometry(s,{depth:.025,bevelEnabled:false,curveSegments:12});c.geom(a,CELL.GLASS,o);A(w,h+.065,.065,.085,CELL.STONE_DARK,o);};
+
+    B(5.8,.1,5.1,CELL.STONE,{y:.05});B(5.32,1.43,2.68,CELL.STONE,{y:.815,z:-.82});roof(2.93,5.55,1.05,{y:1.53,z:-.82,ry:Math.PI/2});B(4.70,.25,.22,CELL.GLASS,{y:2.64,z:-.82});roof(.43,4.85,.18,{y:2.77,z:-.82,ry:Math.PI/2});
+    for(const z of [-2.18,.54])for(let i=0;i<7;i++)archpane(.43,1.10,{x:-2.30+i*.767,y:.30,z,ry:z<0?Math.PI:0});B(.54,.65,.045,CELL.WOOD,{y:.425,z:.62});C(.08,.16,CELL.GLOW,{y:1.23,z:.64,emissive:.75});
+    for(const x of [-1.85,0,1.85]){C(.34,.06,CELL.WOOD,{x,y:.61,z:1.50});C(.045,.48,CELL.METAL,{x,y:.34,z:1.50});for(const dx of [-.47,.47]){C(.12,.07,CELL.WOOD,{x:x+dx,y:.35,z:1.50});C(.035,.23,CELL.METAL,{x:x+dx,y:.215,z:1.50});}}if(rand()<.5)B(.24,.44,.25,CELL.STONE,{x:1.5,y:2.7,z:-.82});
+    return {label:"Dining Hall",kind:'landmark'};
+  },
+  meditationhall(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const E=(x,y,z,k,o={})=>{const g=new THREE.SphereGeometry(1,8,6);g.scale(x,y,z);c.geom(g,k,o);};
+
+    B(4.8,.1,4.8,CELL.STONE,{y:.05});B(3.3,.12,2.8,CELL.WOOD,{y:.16,z:-.55});for(const x of [-1.4,1.4])for(const z of [-1.70,.65])C(.065,1.16,CELL.WOOD,{x,y:.80,z});
+    for(let i=0;i<3;i++){const r=2.08-i*.44,y=1.39+i*.50;const q=new THREE.ConeGeometry(r,.49,4);q.rotateY(Math.PI/4);q.scale(1,1,.89);c.geom(q,CELL.ROOF,{y:y+.245,z:-.55});if(i<2)B((r-.30)*.86,.22,(r-.30)*.75,CELL.STONE,{y:y+.54,z:-.55});C(.06,.13,CELL.GLOW,{x:i===0?.80:0,y:y-.10,z:-.55+(i===0?1.03:r*.61),emissive:.6});}
+    B(3.6,.025,1.08,CELL.EARTH,{y:.113,z:1.61});for(const [x,z,r]of [[-.97,1.69,.28],[0,1.52,.36],[.94,1.78,.22]])E(r,r*.65,r*.8,CELL.STONE_DARK,{x,y:.14+r*.65,z});B(.55,.65,.045,CELL.WOOD,{y:.545,z:-1.67});
+    return {label:"Meditation Hall",kind:'landmark'};
+  },
+  artmuseum(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const P=(pts,d,k,o={})=>{const s=new THREE.Shape();pts.forEach(([x,y],i)=>i?s.lineTo(x,y):s.moveTo(x,y));s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:false,curveSegments:12});g.translate(0,0,-d/2);c.geom(g,k,o);};
+    const R=(r,t,k,o={})=>c.geom(new THREE.TorusGeometry(r,t,6,24),k,o);
+    const pane=(w,h,o={},lit=false)=>{B(w+.10,h+.10,.055,CELL.STONE_DARK,o);B(w,h,.025,lit?CELL.GLOW:CELL.GLASS,{...o,z:(o.z||0)+Math.cos(o.ry||0)*.035,x:(o.x||0)+Math.sin(o.ry||0)*.035,emissive:lit?.55:0});};
+
+    B(5.6,.1,4.8,CELL.STONE,{y:.05});B(4.9,1.58,2.76,CELL.LIGHT,{y:.89,z:-.75});for(let i=0;i<4;i++){const x=-1.84+i*1.23;P([[-.615,0],[.615,0],[.615,.50]],2.85,CELL.ROOF,{x,y:1.68,z:-.75});B(.03,.47,2.80,CELL.GLASS,{x:x+.62,y:1.935,z:-.75});}
+    B(2.13,.93,1.25,CELL.LIGHT,{x:-1.14,y:1.35,z:1.12});B(1.75,.40,.03,CELL.GLASS,{x:-1.14,y:1.43,z:1.76});B(.54,.65,.045,CELL.WOOD,{x:-1.15,y:.425,z:.65});
+    B(1.02,.22,1.04,CELL.STONE,{x:1.45,y:.21,z:1.25});R(.47,.09,CELL.ACCENT,{x:1.45,y:.90,z:1.25,ry:.4});for(const x of [-1.9,-.95,0,.95,1.9])pane(.46,.59,{x,y:1.03,z:-2.14,ry:Math.PI});pane(.38,.54,{x:2.46,y:.99,z:-.70,ry:Math.PI/2},true);
+    return {label:"Art Museum",kind:'landmark'};
+  },
+  sciencetower(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+
+    B(3.5,.1,3.5,CELL.STONE,{y:.05});B(1.72,1.15,1.72,CELL.STONE,{y:.675});B(1.60,3.60,1.60,CELL.GLASS,{y:3.05});
+    for(let i=0;i<4;i++){const a=i*Math.PI/2;for(const u of [-.73,0,.73])B(.045,3.75,.16,CELL.METAL,{x:.85*Math.sin(a)+u*Math.cos(a),y:3.06,z:.85*Math.cos(a)-u*Math.sin(a),ry:a});}for(const y of [1.27,1.89,2.51,3.13,3.75,4.37,4.92])B(1.83,.065,1.83,CELL.METAL,{y});B(1.86,.055,1.86,CELL.ACCENT,{y:4.97,emissive:.6});B(1.80,.065,1.80,CELL.METAL,{y:5.005});B(.50,.65,.04,CELL.WOOD,{y:.425,z:.88});
+    C(.045,.42,CELL.METAL,{y:5.20});const dish=new THREE.SphereGeometry(.43,14,7,0,Math.PI*2,0,Math.PI/2);dish.rotateX(.5);c.geom(dish,CELL.METAL,{y:5.57,spin:.15});B(.23,.31,.03,CELL.GLOW,{y:2.16,z:.821,emissive:.55});
+    return {label:"Science Tower",kind:'landmark'};
+  },
+  dormtower(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+
+    B(3.7,.10,3.7,CELL.STONE,{y:.05});B(2.60,2.57,2.60,CELL.STONE,{y:1.385});const lit=Math.floor(rand()*12);for(let f=0;f<4;f++){const a=f*Math.PI/2;for(let j=0;j<4;j++)for(let i=0;i<3;i++){const u=(i-1)*.80;B(.42,.36,.035,f===0&&j*3+i===lit?CELL.GLOW:CELL.STONE_DARK,{x:1.313*Math.sin(a)+u*Math.cos(a),y:.55+j*.60,z:1.313*Math.cos(a)-u*Math.sin(a),ry:a,emissive:f===0&&j*3+i===lit?.5:0});}}
+    for(const z of [-1.42,1.42])for(const y of [1.04,1.64,2.24]){B(2.32,.06,.30,CELL.STONE,{y,z});B(2.27,.22,.025,CELL.METAL,{y:y+.15,z:z+Math.sign(z)*.135});}B(2.72,.10,2.72,CELL.ROOF,{y:2.72});for(const x of [-1.22,1.22])B(.16,.20,2.58,CELL.STONE,{x,y:2.86});B(1.90,.16,1.84,CELL.LEAF,{y:2.88});B(.50,.65,.045,CELL.WOOD,{y:.425,z:1.35});
+    return {label:"Residence Tower",kind:'landmark'};
+  },
+  lecturecomplex(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const P=(pts,d,k,o={})=>{const s=new THREE.Shape();pts.forEach(([x,y],i)=>i?s.lineTo(x,y):s.moveTo(x,y));s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:false,curveSegments:12});g.translate(0,0,-d/2);c.geom(g,k,o);};
+    const roof=(w,d,h,o={})=>P([[-w/2,0],[w/2,0],[0,h]],d,CELL.ROOF,o);
+    const pane=(w,h,o={},lit=false)=>{B(w+.10,h+.10,.055,CELL.STONE_DARK,o);B(w,h,.025,lit?CELL.GLOW:CELL.GLASS,{...o,z:(o.z||0)+Math.cos(o.ry||0)*.035,x:(o.x||0)+Math.sin(o.ry||0)*.035,emissive:lit?.55:0});};
+
+    B(5.8,.1,5.6,CELL.STONE,{y:.05});for(let i=0;i<3;i++){const a=(i-1)*.48,x=(i-1)*1.64,z=-.83;const key='wing'+i;c.group(key,{x,z,ry:a});B(1.30,1.24,2.8,CELL.STONE,{y:.72});roof(1.48,2.96,.77,{y:1.34});for(const side of [-1,1])for(const zz of [-.90,0,.90])pane(.34,.46,{x:side*.66,y:.91,z:zz,ry:side*Math.PI/2});c.end();}
+    B(3.05,.99,1.38,CELL.GLASS,{y:.595,z:1.07});B(3.20,.10,1.50,CELL.ROOF,{y:1.14,z:1.07});for(const x of [-1.48,-.75,0,.75,1.48])B(.045,.99,.045,CELL.METAL,{x,y:.60,z:1.78});B(.54,.65,.045,CELL.WOOD,{y:.425,z:1.82});B(.10,.19,.045,CELL.GLOW,{x:.52,y:.93,z:1.82,emissive:.65});
+    return {label:"Lecture Complex",kind:'landmark'};
+  },
+  librarywing(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const A=(w,h,t,d,k,o={})=>{const r=w/2,cy=h-r-t,s=new THREE.Shape();s.moveTo(-r-t,0);s.lineTo(-r-t,cy);s.absarc(0,cy,r+t,Math.PI,0,true);s.lineTo(r+t,0);s.lineTo(r,0);s.lineTo(r,cy);s.absarc(0,cy,r,0,Math.PI,false);s.lineTo(-r,0);s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:false,curveSegments:12});g.translate(0,0,-d/2);c.geom(g,k,o);};
+    const archpane=(w,h,o={})=>{const r=w/2,s=new THREE.Shape();s.moveTo(-r,0);s.lineTo(-r,h-r);s.absarc(0,h-r,r,Math.PI,0,true);s.lineTo(r,0);s.closePath();const a=new THREE.ExtrudeGeometry(s,{depth:.025,bevelEnabled:false,curveSegments:12});c.geom(a,CELL.GLASS,o);A(w,h+.065,.065,.085,CELL.STONE_DARK,o);};
+
+    B(5.6,.10,3.25,CELL.STONE,{y:.05});B(5.24,1.44,2.85,CELL.STONE,{y:.82});B(5.36,.10,2.97,CELL.ROOF,{y:1.59});for(const z of [-1.44,1.44])for(let i=0;i<7;i++)archpane(.43,1.13,{x:-2.25+i*.75,y:.25,z,ry:z<0?Math.PI:0});
+    B(.52,.65,.05,CELL.WOOD,{y:.425,z:1.50});C(.47,.39,CELL.GLASS,{y:1.83},12);C(.12,.24,CELL.GLOW,{y:1.84,emissive:.75});c.geom(new THREE.ConeGeometry(.58,.36,8),CELL.ROOF,{y:2.205});if(rand()<.5)B(.26,.18,.25,CELL.METAL_DARK,{x:1.95,y:1.73,z:-.8});
+    return {label:"Library Annex",kind:'landmark'};
+  },
+  sportshall(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const P=(pts,d,k,o={})=>{const s=new THREE.Shape();pts.forEach(([x,y],i)=>i?s.lineTo(x,y):s.moveTo(x,y));s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:false,curveSegments:12});g.translate(0,0,-d/2);c.geom(g,k,o);};
+    const pane=(w,h,o={},lit=false)=>{B(w+.10,h+.10,.055,CELL.STONE_DARK,o);B(w,h,.025,lit?CELL.GLOW:CELL.GLASS,{...o,z:(o.z||0)+Math.cos(o.ry||0)*.035,x:(o.x||0)+Math.sin(o.ry||0)*.035,emissive:lit?.55:0});};
+
+    B(5.8,.10,4.6,CELL.STONE,{y:.05});B(5.38,1.35,4.13,CELL.STONE,{y:.775});const q=new THREE.CylinderGeometry(2.14,2.14,5.55,24,1,true,0,Math.PI);q.rotateZ(Math.PI/2);q.scale(1,.36,1);c.geom(q,CELL.ROOF,{y:1.46});for(const x of [-2.775,2.775]){const pts=[[-2.14,0],[2.14,0]];for(let i=0;i<=18;i++){const a=i*Math.PI/18;pts.push([2.14*Math.cos(a),.7704*Math.sin(a)]);}P(pts,.045,CELL.STONE,{x,y:1.46,ry:Math.PI/2});}
+    for(const z of [-2.08,2.08])for(let i=0;i<8;i++)pane(.48,.29,{x:-2.30+i*.657,y:1.17,z,ry:z<0?Math.PI:0});for(const x of [-.35,.35])B(.66,.78,.045,CELL.WOOD,{x,y:.49,z:2.12});C(.035,1.94,CELL.METAL,{x:2.60,y:1.07,z:1.97});B(.30,.20,.18,CELL.METAL_DARK,{x:2.60,y:2.10,z:1.97});B(.24,.14,.026,CELL.GLOW,{x:2.60,y:2.10,z:2.08,emissive:.7});
+    return {label:"Sports Hall",kind:'landmark'};
+  },
+  bellpavilion(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const E=(x,y,z,k,o={})=>{const g=new THREE.SphereGeometry(1,8,6);g.scale(x,y,z);c.geom(g,k,o);};
+    const P=(pts,d,k,o={})=>{const s=new THREE.Shape();pts.forEach(([x,y],i)=>i?s.lineTo(x,y):s.moveTo(x,y));s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:false,curveSegments:12});g.translate(0,0,-d/2);c.geom(g,k,o);};
+    const roof=(w,d,h,o={})=>P([[-w/2,0],[w/2,0],[0,h]],d,CELL.ROOF,o);
+
+    B(3.2,.10,3.2,CELL.STONE,{y:.05,label:'Pavilion footing'});for(const x of [-.91,.91])for(const z of [-.91,.91]){B(.20,1.66,.20,CELL.STONE,{x,y:.93,z,label:x<0&&z>0?'Stone piers':undefined});B(.31,.11,.31,CELL.STONE,{x,y:1.80,z});}B(2.15,.13,.15,CELL.WOOD,{y:1.88,z:.70,label:'Bell beam'});roof(2.60,2.58,.80,{y:1.95,label:'Pitched roof'});
+    c.group('bell',{y:1.86,z:.70});const profile=[new THREE.Vector2(.07,0),new THREE.Vector2(.15,-.07),new THREE.Vector2(.18,-.31),new THREE.Vector2(.34,-.52),new THREE.Vector2(.36,-.57),new THREE.Vector2(.29,-.58),new THREE.Vector2(.24,-.49),new THREE.Vector2(.10,-.30),new THREE.Vector2(.07,0)];c.geom(new THREE.LatheGeometry(profile,16),CELL.METAL,{label:'Hanging bell'});C(.023,.48,CELL.METAL_DARK,{y:-.28});E(.07,.08,.07,CELL.METAL_DARK,{y:-.56,label:'Clapper'});c.end();
+    return {label:"Bell Pavilion",kind:'hero',loop:4,pose(t,p){p.bell.rotation.z=.30*Math.sin(2*Math.PI*t);}};
+  },
+  watertower(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const rod=(a,b,r,k,o={})=>{const u=new THREE.Vector3(...a),v=new THREE.Vector3(...b),d=v.clone().sub(u);const q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.clone().normalize());const g=new THREE.CylinderGeometry(r,r,d.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(q));const p=u.add(v).multiplyScalar(.5);c.geom(g,k,{x:p.x,y:p.y,z:p.z,...o});};
+    const dome=(r,h,k,o={})=>{const a=new THREE.SphereGeometry(r,24,12,0,Math.PI*2,0,Math.PI/2);a.scale(1,h/r,1);c.geom(a,k,o);};
+
+    B(3.4,.10,3.4,CELL.STONE,{y:.05});for(const x of [-.65,.65])for(const z of [-.65,.65]){C(.07,2.53,CELL.METAL,{x,y:1.365,z});B(.28,.12,.28,CELL.STONE,{x,y:.16,z});}for(const z of [-.65,.65]){rod([-.65,.25,z],[.65,2.58,z],.035,CELL.METAL);rod([.65,.25,z],[-.65,2.58,z],.035,CELL.METAL);}for(const x of [-.65,.65])rod([x,.25,-.65],[x,2.58,.65],.035,CELL.METAL);
+    C(.99,1.06,CELL.METAL,{y:3.08},20);dome(1.00,.29,CELL.METAL,{y:3.61});C(1.01,.055,CELL.ACCENT,{y:3.21,emissive:.6},20);C(.085,.1,CELL.METAL_DARK,{y:3.95});for(const x of [-.16,.16])C(.018,2.64,CELL.METAL,{x,y:1.42,z:1.03});for(let i=0;i<12;i++)B(.35,.022,.025,CELL.METAL,{y:.20+i*.23,z:1.03});B(.63,.76,.38,CELL.STONE,{y:.48,z:-.40});B(.50,.65,.05,CELL.WOOD,{y:.425,z:-.185});
+    return {label:"Water Tower",kind:'landmark'};
+  },
+  windturbine(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const pack=(geos,k,o={})=>{const p=[],n=[];for(const a of geos){const g=a.index?a.toNonIndexed():a;p.push(...g.attributes.position.array);n.push(...g.attributes.normal.array);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(n,3));c.geom(g,k,o);};
+
+    C(.60,.10,CELL.STONE,{y:.05,label:'Foundation'},16);c.geom(new THREE.CylinderGeometry(.10,.23,5.90,12),CELL.LIGHT,{y:3.05,label:'Tapered mast'});B(.42,.35,.74,CELL.LIGHT,{y:5.84,z:-.15,label:'Nacelle'});B(.20,.14,.035,CELL.METAL_DARK,{y:5.84,z:-.54,label:'Service vent'});B(.19,.46,.035,CELL.STONE_DARK,{y:.40,z:.22,label:'Service hatch'});
+    c.group('rotor',{y:5.84,z:.29});const geos=[new THREE.CylinderGeometry(.16,.16,.22,12).rotateX(Math.PI/2)];for(let i=0;i<3;i++){const shape=new THREE.Shape();shape.moveTo(-.09,.12);shape.lineTo(.13,.32);shape.lineTo(.11,1.15);shape.lineTo(-.025,1.75);shape.lineTo(-.09,1.72);shape.lineTo(-.17,.51);shape.closePath();const g=new THREE.ExtrudeGeometry(shape,{depth:.045,bevelEnabled:false});g.rotateZ(i*Math.PI*2/3);geos.push(g);}pack(geos,CELL.LIGHT,{spin:.42,spinAxis:'z',label:'Three-blade rotor'});c.end();
+    return {label:"Campus Wind Turbine",kind:'hero'};
+  },
+  solarfield(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+
+    B(3,.10,2,CELL.STONE,{y:.05});
+    for(let j=0;j<2;j++)for(let i=0;i<3;i++){const x=-1+i,z=-.51+j*1.02;B(.89,.045,.83,CELL.GLASS,{x,y:.48,z,rx:.40});for(const dx of [-.43,.43])B(.025,.048,.85,CELL.METAL,{x:x+dx,y:.48,z,rx:.40});for(const dz of [-.26,.26])C(.026,.44-dz*.422,CELL.METAL,{x,y:(.44-dz*.422)/2,z:z+dz});}
+    return {label:"Solar Array",kind:'landmark'};
+  },
+  greenhousedome(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const R=(r,t,k,o={})=>c.geom(new THREE.TorusGeometry(r,t,6,24),k,o);
+
+    C(1.5,.10,CELL.STONE,{y:.05},20);const skin=new THREE.SphereGeometry(1.46,12,6,0,Math.PI*2,0,Math.PI/2);c.geom(skin,CELL.GLASS,{y:.10});for(let i=0;i<6;i++){const g=new THREE.TorusGeometry(1.477,.019,5,24,Math.PI);g.rotateY(i*Math.PI/6);c.geom(g,CELL.METAL,{y:.10});}for(const a of [.40,.85])R(1.48*Math.cos(a),.019,CELL.METAL,{y:.1+1.48*Math.sin(a),rx:Math.PI/2});for(const x of [-.62,.62])B(.60,.22,.85,CELL.LEAF,{x,y:.21,z:-.25});B(.49,.65,.055,CELL.WOOD,{y:.425,z:1.43});B(.085,.15,.05,CELL.GLOW,{x:.32,y:.75,z:1.30,emissive:.6});
+    return {label:"Botanical Dome",kind:'landmark'};
+  },
+  busstation(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+
+    B(5.8,.10,3.8,CELL.STONE,{y:.05});for(const x of [-2.5,0,2.5])for(const z of [-1.36,1.36])B(.075,1.86,.075,CELL.METAL,{x,y:1.03,z});B(5.65,.14,3.40,CELL.ROOF,{y:2.03});B(1.45,1.38,1.1,CELL.GLASS,{x:-1.76,y:.79,z:-.72});B(.50,.65,.045,CELL.WOOD,{x:-1.76,y:.425,z:-.14});
+    for(const x of [-1.45,1.45]){B(1.19,.06,.30,CELL.WOOD,{x,y:.38,z:.10});for(const dx of [-.44,.44])B(.045,.25,.24,CELL.METAL,{x:x+dx,y:.225,z:.1});B(1.53,.03,.05,CELL.LIGHT,{x,y:.118,z:1.63});}B(3.0,.04,.055,CELL.GLOW,{y:1.91,z:.85,emissive:.5});B(1.2,.26,.055,CELL.STONE_DARK,{y:1.69,z:1.4});
+    return {label:"Campus Bus Station",kind:'landmark'};
+  },
+  campusbus(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    c.group('footprint',{x:-0.0,z:-0.01025});
+
+    B(1.04,.66,2.40,CELL.LIGHT,{y:.62});B(.94,.17,2.15,CELL.ROOF,{y:1.025});for(const x of [-.50,.50]){B(.025,.28,1.52,CELL.GLASS,{x:x*1.066,y:.81,z:-.20});B(.027,.06,2.20,CELL.ACCENT,{x:x*1.066,y:.57});for(const z of [-.67,-.20,.27])B(.035,.30,.035,CELL.LIGHT,{x:x*1.088,y:.81,z});for(const z of [-.74,.70])C(.22,.13,CELL.METAL_DARK,{x:x*1.05,y:.22,z,rz:Math.PI/2},10);}
+    B(.85,.30,.035,CELL.GLASS,{y:.81,z:1.216});B(.72,.21,.03,CELL.GLASS,{y:.81,z:-1.217});B(.22,.50,.03,CELL.STONE_DARK,{x:.32,y:.54,z:1.22});for(const x of [-.33,.33])B(.14,.085,.035,CELL.GLOW,{x,y:.44,z:1.235,emissive:.6});
+    c.end();
+    return {label:"Campus Shuttle",kind:'landmark'};
+  },
+  foodtruck(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    c.group('footprint',{x:0.00874997,z:-0.25005334});
+
+    B(2.6,.77,1.05,CELL.ACCENT2,{y:.655});B(2.64,.09,1.12,CELL.ROOF,{y:1.08});for(const x of [-.85,.85])for(const z of [-.52,.52])C(.23,.12,CELL.METAL_DARK,{x,y:.23,z,rx:Math.PI/2},10);B(.65,.30,.035,CELL.GLASS,{x:-.88,y:.86,z:.54});B(.035,.31,.74,CELL.GLASS,{x:-1.32,y:.84});
+    B(1.13,.40,.03,CELL.STONE_DARK,{x:.32,y:.81,z:.543});B(1.03,.32,.028,CELL.GLOW,{x:.32,y:.81,z:.564,emissive:.55});B(1.36,.055,.43,CELL.WOOD,{x:.32,y:.575,z:.70});B(1.43,.045,.62,CELL.CLOTH,{x:.32,y:1.13,z:.77,rx:.14});B(.50,.65,.04,CELL.WOOD,{x:.83,y:.595,z:-.55});
+    c.end();
+    return {label:"Campus Food Truck",kind:'landmark'};
+  },
+  treehouse(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const E=(x,y,z,k,o={})=>{const g=new THREE.SphereGeometry(1,8,6);g.scale(x,y,z);c.geom(g,k,o);};
+    const rod=(a,b,r,k,o={})=>{const u=new THREE.Vector3(...a),v=new THREE.Vector3(...b),d=v.clone().sub(u);const q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.clone().normalize());const g=new THREE.CylinderGeometry(r,r,d.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(q));const p=u.add(v).multiplyScalar(.5);c.geom(g,k,{x:p.x,y:p.y,z:p.z,...o});};
+    const P=(pts,d,k,o={})=>{const s=new THREE.Shape();pts.forEach(([x,y],i)=>i?s.lineTo(x,y):s.moveTo(x,y));s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:false,curveSegments:12});g.translate(0,0,-d/2);c.geom(g,k,o);};
+    const roof=(w,d,h,o={})=>P([[-w/2,0],[w/2,0],[0,h]],d,CELL.ROOF,o);
+    const pane=(w,h,o={},lit=false)=>{B(w+.10,h+.10,.055,CELL.STONE_DARK,o);B(w,h,.025,lit?CELL.GLOW:CELL.GLASS,{...o,z:(o.z||0)+Math.cos(o.ry||0)*.035,x:(o.x||0)+Math.sin(o.ry||0)*.035,emissive:lit?.55:0});};
+    c.group('footprint',{x:-0.0,z:0.32174485});
+
+    C(.21,1.95,CELL.WOOD,{y:.975},8);rod([0,1.20,0],[-.87,2.21,-.44],.13,CELL.WOOD);rod([0,1.33,0],[.80,2.25,-.36],.13,CELL.WOOD);B(2.40,.13,2.05,CELL.WOOD,{y:1.39});B(1.38,.77,1.19,CELL.WOOD,{y:1.84,z:-.24});roof(1.64,1.44,.56,{y:2.23,z:-.24});B(.45,.65,.05,CELL.STONE_DARK,{y:1.785,z:.38});pane(.27,.28,{x:.708,y:1.92,z:-.30,ry:Math.PI/2},true);
+    for(const [x,z]of [[-.98,-.55],[.98,-.58],[0,-1.12]])E(.71,.69,.66,CELL.LEAF,{x,y:2.61,z});for(const x of [-.23,.23])rod([x,.055,1.12],[x,1.4,.79],.017,CELL.CLOTH);for(let i=0;i<7;i++)B(.50,.035,.045,CELL.WOOD,{y:.12+i*.18,z:1.10-i*.043});
+    c.end();
+    return {label:"Oak Treehouse",kind:'landmark'};
+  },
+  bandstand(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const rod=(a,b,r,k,o={})=>{const u=new THREE.Vector3(...a),v=new THREE.Vector3(...b),d=v.clone().sub(u);const q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.clone().normalize());const g=new THREE.CylinderGeometry(r,r,d.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(q));const p=u.add(v).multiplyScalar(.5);c.geom(g,k,{x:p.x,y:p.y,z:p.z,...o});};
+    const dome=(r,h,k,o={})=>{const a=new THREE.SphereGeometry(r,24,12,0,Math.PI*2,0,Math.PI/2);a.scale(1,h/r,1);c.geom(a,k,o);};
+    c.group('footprint',{x:-0.0,z:-0.02999999});
+
+    C(1.72,.20,CELL.STONE,{y:.10},8);for(let i=0;i<8;i++){const a=Math.PI/8+i*Math.PI/4,x=1.47*Math.sin(a),z=1.47*Math.cos(a);C(.05,1.35,CELL.METAL,{x,y:.875,z});if(i!==7){const b=a+Math.PI/4;rod([x,.70,z],[1.47*Math.sin(b),.70,1.47*Math.cos(b)],.025,CELL.METAL);}}dome(1.85,.59,CELL.ROOF,{y:1.59});B(.88,.10,.26,CELL.STONE,{y:.05,z:1.78});C(.07,.14,CELL.GLOW,{y:1.40,emissive:.65});
+    c.end();
+    return {label:"Bandstand",kind:'landmark'};
+  },
+  playground(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const rod=(a,b,r,k,o={})=>{const u=new THREE.Vector3(...a),v=new THREE.Vector3(...b),d=v.clone().sub(u);const q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.clone().normalize());const g=new THREE.CylinderGeometry(r,r,d.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(q));const p=u.add(v).multiplyScalar(.5);c.geom(g,k,{x:p.x,y:p.y,z:p.z,...o});};
+    const P=(pts,d,k,o={})=>{const s=new THREE.Shape();pts.forEach(([x,y],i)=>i?s.lineTo(x,y):s.moveTo(x,y));s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:false,curveSegments:12});g.translate(0,0,-d/2);c.geom(g,k,o);};
+    const roof=(w,d,h,o={})=>P([[-w/2,0],[w/2,0],[0,h]],d,CELL.ROOF,o);
+
+    B(4,.06,4,CELL.EARTH,{y:.03});for(const x of [-1.45,-.52])for(const z of [-1.25,-.25])B(.075,1.43,.075,CELL.WOOD,{x,y:.775,z});B(1.10,.09,1.13,CELL.WOOD,{x:-.985,y:.96,z:-.75});roof(1.23,1.20,.37,{x:-.985,y:1.50,z:-.75});
+    P([[-.25,0],[.20,0],[1.55,.88],[1.55,.96],[.13,.10],[-.25,.10]],.41,CELL.METAL,{x:-1.01,y:.06,z:.22,ry:Math.PI/2});for(const x of [-1.29,-.69])rod([x,.06,-1.70],[x,.99,-1.15],.03,CELL.WOOD);for(let i=0;i<5;i++)B(.63,.03,.045,CELL.WOOD,{x:-.99,y:.16+i*.17,z:-1.64+i*.10});
+    for(const x of [.27,1.63])for(const z of [-1.08,.13])rod([x,.06,z],[x,1.60,-.47],.045,CELL.WOOD);B(1.62,.07,.07,CELL.WOOD,{x:.95,y:1.62,z:-.47});for(const x of [.57,1.30]){for(const dx of [-.14,.14])rod([x+dx,1.58,-.47],[x+dx,.42,-.47],.014,CELL.METAL_DARK);B(.39,.045,.22,CELL.WOOD,{x,y:.40,z:-.47});}
+    return {label:"Playground",kind:'landmark'};
+  },
+  tenniscourt(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+
+    B(5,.10,3,CELL.EARTH,{y:.05});for(const z of [-1.35,1.35])B(4.70,.015,.035,CELL.LIGHT,{y:.108,z});for(const x of [-2.35,2.35])B(.035,.015,2.73,CELL.LIGHT,{x,y:.108});for(const z of [-.92,.92])B(4.70,.015,.025,CELL.LIGHT,{y:.108,z});for(const x of [-1.26,1.26])B(.025,.015,1.85,CELL.LIGHT,{x,y:.108});B(2.52,.015,.025,CELL.LIGHT,{y:.108});for(const z of [-1.42,1.42])C(.025,.46,CELL.METAL,{y:.33,z});for(const y of [.20,.31,.42,.54])B(.02,.015,2.84,CELL.METAL,{y});for(let i=0;i<15;i++)B(.02,.37,.012,CELL.METAL,{y:.355,z:-1.36+i*.194});
+    return {label:"Tennis Court",kind:'landmark'};
+  },
+  swimmingpool(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const T=(pts,r,k,o={})=>c.geom(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(p=>new THREE.Vector3(...p))),Math.min(192,Math.max(24,pts.length*2)),r,6,false),k,o);
+
+    B(5.8,.10,4.5,CELL.STONE,{y:.05});B(5.0,.025,2.50,CELL.GLASS,{y:.106,z:-.57});for(const z of [-1.85,.71])B(5.10,.12,.10,CELL.STONE,{y:.16,z});for(const x of [-2.55,2.55])B(.10,.12,2.66,CELL.STONE,{x,y:.16,z:-.57});for(const z of [-1.25,-.57,.11])B(4.78,.012,.024,CELL.LIGHT,{y:.128,z});
+    B(.38,.30,.38,CELL.STONE,{x:-2.52,y:.25,z:-.57});B(.44,.055,.44,CELL.LIGHT,{x:-2.52,y:.43,z:-.57});for(const x of [-1.07,1.07]){B(.47,.07,.90,CELL.CLOTH,{x,y:.29,z:1.51});B(.47,.40,.06,CELL.CLOTH,{x,y:.48,z:1.08,rx:-.28});for(const z of [1.20,1.82])B(.42,.18,.05,CELL.METAL,{x,y:.19,z});}for(const x of [1.70,1.98])T([[x,.1,.96],[x,.52,.96],[x,.55,.61],[x,.18,.48]],.025,CELL.METAL);
+    return {label:"Outdoor Pool",kind:'landmark'};
+  },
+  skatepark(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const P=(pts,d,k,o={})=>{const s=new THREE.Shape();pts.forEach(([x,y],i)=>i?s.lineTo(x,y):s.moveTo(x,y));s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:false,curveSegments:12});g.translate(0,0,-d/2);c.geom(g,k,o);};
+    const R=(r,t,k,o={})=>c.geom(new THREE.TorusGeometry(r,t,6,24),k,o);
+
+    B(4,.10,4,CELL.STONE,{y:.05});const pts=[new THREE.Vector2(.05,.11),new THREE.Vector2(.48,.11),new THREE.Vector2(.73,.20),new THREE.Vector2(.97,.44),new THREE.Vector2(1.10,.70),new THREE.Vector2(1.21,.70),new THREE.Vector2(1.08,.37),new THREE.Vector2(.79,.13),new THREE.Vector2(.05,.10)];c.geom(new THREE.LatheGeometry(pts,24),CELL.STONE,{x:-.60,z:.20});R(1.15,.03,CELL.METAL,{x:-.60,y:.70,z:.20,rx:Math.PI/2});
+    const profile=[[-.54,.10],[.54,.10],[.54,.99],[.40,.99]];for(let i=0;i<=12;i++){const a=i*Math.PI/24;profile.push([.40-.88*Math.sin(a),.99-.88*Math.cos(a)]);}P(profile,1.47,CELL.STONE,{x:1.16,z:-.94,ry:Math.PI});B(.65,.08,1.5,CELL.STONE,{x:1.20,y:.97,z:-.94});C(.035,1.51,CELL.METAL,{x:.78,y:1.035,z:-.94,rx:Math.PI/2});
+    return {label:"Skate Park",kind:'landmark'};
+  },
+  stadiumstand(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const rod=(a,b,r,k,o={})=>{const u=new THREE.Vector3(...a),v=new THREE.Vector3(...b),d=v.clone().sub(u);const q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.clone().normalize());const g=new THREE.CylinderGeometry(r,r,d.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(q));const p=u.add(v).multiplyScalar(.5);c.geom(g,k,{x:p.x,y:p.y,z:p.z,...o});};
+
+    B(6,.10,3.9,CELL.STONE,{y:.05,label:'Stand foundation'});for(let i=0;i<6;i++){const z=1.13-i*.44,h=.18+i*.18;B(5.8,h,.43,CELL.METAL_DARK,{y:.10+h/2,z,label:i===0?'Stepped risers':undefined});B(5.8,.065,.28,CELL.WOOD,{y:.10+h+.0325,z,label:i===3?'Six seating tiers':undefined});}
+    for(const x of [-2.65,0,2.65]){B(.09,2.64,.09,CELL.METAL,{x,y:1.42,z:-1.53,label:x===0?'Rear support':undefined});rod([x,1.70,-1.53],[x,2.54,.82],.045,CELL.METAL);B(.08,.10,3.13,CELL.METAL,{x,y:2.69,z:-.02});}B(5.98,.12,3.70,CELL.ROOF,{y:2.85,rx:-.055,label:'Cantilevered canopy'});B(5.76,.04,.04,CELL.METAL,{y:1.68,z:-1.41,label:'Back rail'});for(let i=0;i<9;i++)C(.023,.46,CELL.METAL,{x:-2.7+i*.675,y:1.45,z:-1.41});B(3.5,.035,.06,CELL.GLOW,{y:2.72,z:.48,emissive:.55,label:'Under-canopy lighting'});
+    return {label:"Covered Stadium Stand",kind:'hero'};
+  },
+  scoreboard(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+
+    for(const x of [-.66,.66]){B(.22,.10,.28,CELL.STONE,{x,y:.05});C(.05,1.26,CELL.METAL,{x,y:.73});}B(2,.77,.11,CELL.METAL_DARK,{y:1.32});B(1.78,.52,.03,CELL.BLACK,{y:1.36,z:.074});B(1.79,.04,.03,CELL.GLOW,{y:1.06,z:.079,emissive:.6});
+    return {label:"Pitch Scoreboard",kind:'landmark'};
+  },
+  lighthouse(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const P=(pts,d,k,o={})=>{const s=new THREE.Shape();pts.forEach(([x,y],i)=>i?s.lineTo(x,y):s.moveTo(x,y));s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:false,curveSegments:12});g.translate(0,0,-d/2);c.geom(g,k,o);};
+    const R=(r,t,k,o={})=>c.geom(new THREE.TorusGeometry(r,t,6,24),k,o);
+    const roof=(w,d,h,o={})=>P([[-w/2,0],[w/2,0],[0,h]],d,CELL.ROOF,o);
+    const pane=(w,h,o={},lit=false)=>{B(w+.10,h+.10,.055,CELL.STONE_DARK,o);B(w,h,.025,lit?CELL.GLOW:CELL.GLASS,{...o,z:(o.z||0)+Math.cos(o.ry||0)*.035,x:(o.x||0)+Math.sin(o.ry||0)*.035,emissive:lit?.55:0});};
+    c.group('footprint',{x:0.61000001,z:-0.0});
+
+    C(1.18,.10,CELL.STONE,{y:.05,label:'Tower footing'},16);c.geom(new THREE.CylinderGeometry(.43,.69,4.32,16),CELL.LIGHT,{y:2.26,label:'Tapered tower'});for(const y of [1.64,3.37])C(.69-(y-.1)/4.32*.26+.015,.11,CELL.ACCENT,{y,emissive:.6,label:y<2?'Brand bands':undefined},16);
+    C(.82,.14,CELL.STONE,{y:4.47,label:'Gallery'});for(let i=0;i<12;i++){const a=i*Math.PI/6;C(.025,.40,CELL.METAL,{x:.74*Math.sin(a),y:4.71,z:.74*Math.cos(a)});}R(.74,.025,CELL.METAL,{y:4.91,rx:Math.PI/2});c.geom(new THREE.CylinderGeometry(.47,.47,.66,16,1,true,.50,Math.PI*2-1.0),CELL.GLASS,{y:4.91,label:'Lamp room'});
+    // The asymmetric lamp is the sole spinning part; glazing is slotted for visibility.
+    const lamp=new THREE.BoxGeometry(.53,.17,.12);lamp.translate(.10,0,0);c.geom(lamp,CELL.GLOW,{y:4.94,emissive:1,spin:.65,label:'Rotating beacon'});c.geom(new THREE.ConeGeometry(.64,.57,16),CELL.ROOF,{y:5.55,label:'Lantern roof'});C(.025,.18,CELL.METAL,{y:5.91});B(.50,.65,.04,CELL.WOOD,{y:.425,z:.696});
+    B(1.68,.10,1.70,CELL.STONE,{x:-1.56,y:.05,z:-.20});B(1.45,.83,1.45,CELL.STONE,{x:-1.56,y:.515,z:-.20,label:'Keeper cottage'});roof(1.65,1.65,.59,{x:-1.56,y:.93,z:-.20});B(.48,.65,.04,CELL.WOOD,{x:-1.56,y:.425,z:.55});pane(.29,.32,{x:-2.296,y:.64,z:-.15,ry:-Math.PI/2});
+    c.end();
+    return {label:"Harbour Lighthouse",kind:'hero'};
+  },
+  ferryterminal(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const rod=(a,b,r,k,o={})=>{const u=new THREE.Vector3(...a),v=new THREE.Vector3(...b),d=v.clone().sub(u);const q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.clone().normalize());const g=new THREE.CylinderGeometry(r,r,d.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(q));const p=u.add(v).multiplyScalar(.5);c.geom(g,k,{x:p.x,y:p.y,z:p.z,...o});};
+    const P=(pts,d,k,o={})=>{const s=new THREE.Shape();pts.forEach(([x,y],i)=>i?s.lineTo(x,y):s.moveTo(x,y));s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:false,curveSegments:12});g.translate(0,0,-d/2);c.geom(g,k,o);};
+    const R=(r,t,k,o={})=>c.geom(new THREE.TorusGeometry(r,t,6,24),k,o);
+    const roof=(w,d,h,o={})=>P([[-w/2,0],[w/2,0],[0,h]],d,CELL.ROOF,o);
+    c.group('footprint',{x:-0.0,z:0.00928909});
+
+    B(5.7,.10,3.6,CELL.STONE,{y:.05,z:-.60});B(3.95,1.28,2.37,CELL.GLASS,{y:.74,z:-.76});for(const x of [-1.98,0,1.98])for(const z of [-1.97,.45])B(.055,1.47,.055,CELL.METAL,{x,y:.835,z});roof(2.83,4.41,.64,{y:1.55,z:-.76,ry:Math.PI/2});B(.57,.65,.04,CELL.WOOD,{y:.425,z:.47});
+    P([[-.59,0],[.59,.10],[.59,.05]],.83,CELL.WOOD,{z:1.79,ry:Math.PI/2});for(const x of [-.45,.45]){rod([x,.12,.80],[x,.03,2.38],.025,CELL.METAL);rod([x,.49,.80],[x,.40,2.38],.025,CELL.METAL);for(const z of [.84,1.58,2.32])C(.019,.39,CELL.METAL,{x,y:.29-(z-.84)*.057,z});}R(.19,.055,CELL.RED,{x:1.73,y:.69,z:.52});B(1.64,.035,.04,CELL.GLOW,{y:1.40,z:.49,emissive:.65});
+    c.end();
+    return {label:"Ferry Terminal",kind:'landmark'};
+  },
+  boatshed(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const P=(pts,d,k,o={})=>{const s=new THREE.Shape();pts.forEach(([x,y],i)=>i?s.lineTo(x,y):s.moveTo(x,y));s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:false,curveSegments:12});g.translate(0,0,-d/2);c.geom(g,k,o);};
+    const roof=(w,d,h,o={})=>P([[-w/2,0],[w/2,0],[0,h]],d,CELL.ROOF,o);
+    const pane=(w,h,o={},lit=false)=>{B(w+.10,h+.10,.055,CELL.STONE_DARK,o);B(w,h,.025,lit?CELL.GLOW:CELL.GLASS,{...o,z:(o.z||0)+Math.cos(o.ry||0)*.035,x:(o.x||0)+Math.sin(o.ry||0)*.035,emissive:lit?.55:0});};
+
+    B(3.9,.10,3.7,CELL.STONE,{y:.05});B(1.70,1.26,3.0,CELL.WOOD,{x:-.66,y:.73,z:-.15});roof(1.96,3.20,.64,{x:-.66,y:1.36,z:-.15});B(.57,.65,.045,CELL.WOOD,{x:-.66,y:.425,z:1.38});pane(.33,.38,{x:-1.52,y:.87,z:.3,ry:-Math.PI/2},true);
+    for(const z of [-1.18,.86])B(.07,1.8,.07,CELL.METAL,{x:.86,y:1.0,z});for(let i=0;i<3;i++){const y=.40+i*.51;for(const z of [-1.18,.86])B(.75,.045,.045,CELL.METAL,{x:1.14,y,z});const shape=new THREE.Shape();shape.moveTo(0,1.33);shape.bezierCurveTo(.30,.73,.30,-.80,0,-1.33);shape.bezierCurveTo(-.30,-.80,-.30,.73,0,1.33);const hole=new THREE.Path();hole.moveTo(0,1.06);hole.bezierCurveTo(-.17,.66,-.17,-.70,0,-1.06);hole.bezierCurveTo(.17,-.70,.17,.66,0,1.06);shape.holes.push(hole);const g=new THREE.ExtrudeGeometry(shape,{depth:.12,bevelEnabled:false,curveSegments:8});g.rotateX(Math.PI/2);c.geom(g,[CELL.ACCENT,CELL.ACCENT2,CELL.LIGHT][i],{x:1.21,y:y+.14,z:-.15});}
+    return {label:"Boat Rental Shed",kind:'landmark'};
+  },
+  sundial(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const P=(pts,d,k,o={})=>{const s=new THREE.Shape();pts.forEach(([x,y],i)=>i?s.lineTo(x,y):s.moveTo(x,y));s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:false,curveSegments:12});g.translate(0,0,-d/2);c.geom(g,k,o);};
+
+    C(.36,.10,CELL.STONE,{y:.05},12);c.geom(new THREE.CylinderGeometry(.16,.23,.54,10),CELL.STONE,{y:.37});C(.43,.06,CELL.LIGHT,{y:.67},16);P([[-.24,0],[.24,0],[-.24,.30]],.025,CELL.METAL,{y:.70,ry:Math.PI/2});for(let i=0;i<9;i++){const a=(-.75+i*.1875)*Math.PI;B(.025,.015,.07,CELL.METAL,{x:.34*Math.sin(a),y:.71,z:.34*Math.cos(a),ry:a});}
+    return {label:"Garden Sundial",kind:'landmark'};
+  },
+  statueplinth(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    c.group('footprint',{x:-0.07244134,z:-0.0});
+
+    B(1.08,.10,1.08,CELL.STONE,{y:.05});B(.77,.68,.77,CELL.STONE,{y:.44});c.geom(new THREE.TorusKnotGeometry(.43,.075,72,8,2,3),CELL.METAL,{y:1.50,rx:.32});
+    c.end();
+    return {label:"Abstract Campus Sculpture",kind:'landmark'};
+  },
+  bikeshed(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+
+    B(3.8,.10,3.2,CELL.STONE,{y:.05});for(const x of [-1.62,1.62])for(const z of [-1.25,1.25])C(.04,z<0?1.69:1.40,CELL.METAL,{x,y:.1+(z<0?1.69:1.4)/2,z});B(3.66,.085,2.92,CELL.ROOF,{y:1.67,rx:.116});
+    for(const z of [-.66,.60]){B(2.72,.05,.45,CELL.METAL_DARK,{y:.125,z});for(let i=0;i<5;i++){const q=new THREE.TorusGeometry(.18,.020,6,14,Math.PI);q.rotateY(Math.PI/2);c.geom(q,CELL.METAL,{x:-1.08+i*.54,y:.25,z});for(const dz of [-.18,.18])C(.02,.10,CELL.METAL,{x:-1.08+i*.54,y:.20,z:z+dz});}}
+    return {label:"Covered Bike Racks",kind:'landmark'};
+  },
+  noticeboard(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const P=(pts,d,k,o={})=>{const s=new THREE.Shape();pts.forEach(([x,y],i)=>i?s.lineTo(x,y):s.moveTo(x,y));s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:false,curveSegments:12});g.translate(0,0,-d/2);c.geom(g,k,o);};
+    const roof=(w,d,h,o={})=>P([[-w/2,0],[w/2,0],[0,h]],d,CELL.ROOF,o);
+
+    for(const x of [-.51,.51])B(.06,1.20,.06,CELL.WOOD,{x,y:.60});B(1.18,.66,.10,CELL.WOOD,{y:.85});B(1.04,.53,.025,CELL.LIGHT,{y:.85,z:.063});roof(1.35,.33,.19,{y:1.21});
+    return {label:"Campus Notice Board",kind:'landmark'};
+  },
+  phonebooth(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    c.group('footprint',{x:-0.0,z:-0.00500001});
+
+    B(.78,.10,.78,CELL.STONE,{y:.05});for(const x of [-.33,.33])for(const z of [-.33,.33])B(.035,1.29,.035,CELL.METAL,{x,y:.745,z});for(const x of [-.34,.34])B(.018,1.16,.64,CELL.GLASS,{x,y:.75});B(.65,1.16,.018,CELL.GLASS,{y:.75,z:-.34});B(.74,.08,.74,CELL.ACCENT,{y:1.46});B(.48,.65,.025,CELL.GLASS,{y:.425,z:.35});B(.08,.035,.04,CELL.METAL,{x:.16,y:.57,z:.38});B(.20,.06,.20,CELL.GLOW,{y:1.29,emissive:.7});
+    c.end();
+    return {label:"Campus Info Kiosk",kind:'landmark'};
+  },
+// END PIECES
   }
 }

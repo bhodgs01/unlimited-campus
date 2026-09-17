@@ -40,6 +40,10 @@ const CSS = `
 .uc-help h3{margin:0 0 4px;font-size:16px}
 .uc-help p{margin:0;color:var(--muted);font-size:13.5px;line-height:1.5}
 .uc-help kbd{font:inherit;font-size:12px;padding:1px 6px;border:1px solid var(--line);border-radius:6px;background:rgba(255,255,255,.06)}
+.uc-people{position:absolute;left:14px;top:66px;display:flex;gap:6px;padding:5px;pointer-events:auto}
+.uc-people button{display:flex;align-items:center;gap:7px;height:34px;padding:0 11px 0 4px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--text);font:inherit;font-size:12.5px;cursor:pointer}
+.uc-people button img{width:26px;height:26px;border-radius:50%;object-fit:cover;object-position:50% 30%;background:#2a2f3a}
+.uc-people button.active{background:rgba(229,1,255,.18);border-color:rgba(229,1,255,.55)}
 .uc-toast{padding:9px 13px;border-radius:10px;font-size:12.5px;max-width:320px}
 @media (max-width:640px){.uc-card{top:auto;bottom:64px;right:14px;left:14px;width:auto}.uc-title small{display:none}}
 `
@@ -56,6 +60,7 @@ export class Hud {
     this.el.className = 'hud'
     this.el.innerHTML = `
       <div class="panel uc-title"><i></i><b>Unlimited Campus</b><small>Six Castles of Human Flourishing</small></div>
+      <div class="panel uc-people"></div>
       <div class="panel rail">
         <button class="btn" data-act="home" title="Home view (hold to save this view as home)">${ICON.home}</button>
         <button class="btn" data-act="orbit" title="Orbit the campus">${ICON.orbit}</button>
@@ -103,11 +108,13 @@ export class Hud {
     const home = this.$('[data-act="home"]')
     let holdT = 0
     home.addEventListener('pointerdown', () => {
+      this._saved = false
       holdT = setTimeout(() => {
         actions.saveHome?.()
         navigator.vibrate?.(18)
-        this.toast('Home view saved')
+        this.toast('Home view saved: position, angle and zoom')
         holdT = 0
+        this._saved = true
       }, 650)
     })
     const cancel = () => {
@@ -118,13 +125,28 @@ export class Hud {
     home.addEventListener('pointerleave', cancel)
     // the click fires after pointerup; a completed hold must not also fly home
     home.addEventListener('click', (ev) => {
-      if (holdT === 0 && ev.detail !== 0 && this._saved) {
+      if (this._saved) {
         this._saved = false
-        ev.stopImmediatePropagation()
+        ev.stopPropagation()
       }
     }, true)
   }
 
+  setPeople(list, onClick) {
+    const wrap = this.$('.uc-people')
+    wrap.innerHTML = ''
+    for (const p of list) {
+      const b = document.createElement('button')
+      b.dataset.person = p.id
+      b.title = `Find ${p.name}`
+      b.innerHTML = `<img src="${p.face}" alt="">${p.name}`
+      b.addEventListener('click', () => onClick(p.id))
+      wrap.appendChild(b)
+    }
+  }
+  setActivePerson(id) {
+    for (const b of this.$('.uc-people').children) b.classList.toggle('active', b.dataset.person === id)
+  }
   setActiveChip(id) {
     for (const b of this.chips.children) b.classList.toggle('active', b.dataset.castle === id)
   }

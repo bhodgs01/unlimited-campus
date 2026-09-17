@@ -74,6 +74,8 @@ function flat(w, d, color, x, z, y = Y_ROAD, ry = 0) {
   if (ry) g.rotateY(ry)
   g.translate(x, y, z)
   g.userData.color = color
+  // axis-aligned flats are remembered as rectangles, so nothing gets planted on them
+  if (!ry) g.userData.rect = { x, z, hw: w / 2, hd: d / 2, color }
   return g
 }
 function ring(rIn, rOut, color, x, z, y = Y_PAVE, seg = 96, start = 0, arc = P * 2) {
@@ -90,16 +92,21 @@ function disc(r, color, x, z, y = Y_PAVE, seg = 64) {
   g.userData.color = color
   return g
 }
-/** A blob: a circle whose radius wobbles with three sine harmonics, seeded. */
-function blob(r, x, z, seed, y, color, seg = 72) {
+/** The radius of a seeded blob at heading t (shape space). */
+function blobRadius(r, seed) {
   const rand = mulberry32(seed)
   const a1 = rand() * P * 2
   const a2 = rand() * P * 2
   const a3 = rand() * P * 2
+  return (t) => r * (1 + 0.16 * Math.sin(t * 2 + a1) + 0.09 * Math.sin(t * 3 + a2) + 0.05 * Math.sin(t * 5 + a3))
+}
+/** A blob: a circle whose radius wobbles with three sine harmonics, seeded. */
+function blob(r, x, z, seed, y, color, seg = 72) {
+  const radius = blobRadius(r, seed)
   const shape = new THREE.Shape()
   for (let i = 0; i <= seg; i++) {
     const t = (i / seg) * P * 2
-    const rr = r * (1 + 0.16 * Math.sin(t * 2 + a1) + 0.09 * Math.sin(t * 3 + a2) + 0.05 * Math.sin(t * 5 + a3))
+    const rr = radius(t)
     const px = Math.cos(t) * rr
     const pz = Math.sin(t) * rr
     if (i === 0) shape.moveTo(px, pz)
@@ -244,24 +251,36 @@ function ribbon(points, halfW, color, y) {
 
 // ── the plan ──────────────────────────────────────────────────────────────────────────
 /**
- * Build the campus into `scene`. Returns everything the game needs to know about it:
- * obstacles for the navigation grid, pickable castle roots, wander spots per district,
- * the gate, and a tick(dt) that animates the placed pieces.
+ * Build the campus into `scene`. Order matters: water first, then roads (which break for the
+ * river), then every paved surface, then buildings (each refused if it would sit on a road, on
+ * paving, in water or on another building), then the planting, which is filtered last against
+ * all of it so nothing grows out of concrete or water.
  */
-export function buildCampus(scene, { shadows = true, detail = 'medium' } = {}) {
+export function buildCampus(scene, { shadows = true } = {}) {
   const group = new THREE.Group()
   group.name = 'campus'
   scene.add(group)
 
   const flats = []
+  const rects = []
+  const waters = []
   const obstacles = []
   const pickables = []
   const animated = []
+  const placed = []
+  const solids = []
+  const reserved = []
+  const rejected = []
+  const instances = new Map()
   const spots = { plaza: [], grounds: [] }
   const castles = new Map()
-  const placed = []
-  const instances = new Map() // piece name -> transforms[]
+  const landmarks = []
   let placedCount = 0
+  const F = (g) => {
+    flats.push(g)
+    if (g.userData.rect) rects.push(g.userData.rect)
+    return g
+  }
 
   const matCache = new Map()
   const flatMat = (color) => {
@@ -281,46 +300,23 @@ export function buildCampus(scene, { shadows = true, detail = 'medium' } = {}) {
     }
     return matCache.get(color)
   }
-
   const stamp = (name, x, z, ry = 0, s = 1) => {
     if (!instances.has(name)) instances.set(name, [])
     instances.get(name).push({ x, z, ry, s })
   }
-  /** Place one piece on its own (buildings, castles, anything that animates or is clickable). */
-  const place = (name, x, z, { ry = 0, district = 'grounds', seed, scale, onto = group, clearance = 0.6, id, tag, palette } = {}) => {
-    const built = build(name, { district, seed: seed != null ? seed : hashStr(`${name}:${x}:${z}`), scale, shadows, palette })
-    if (!built) return null
-    // castles carry their own moat / crag skirt just under y=0; lift them clear of the lawn plane
-    built.root.position.set(x, tag === 'castle' ? 0.09 : 0, z)
-    built.root.rotation.y = ry
-    built.root.userData.piece = name
-    built.root.userData.id = id || null
-    built.root.userData.tag = tag || null
-    onto.add(built.root)
-    built.root.updateMatrixWorld(true)
-    const box = new THREE.Box3().setFromObject(built.root)
-    const r = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) * 0.5
-    obstacles.push({ x, z, r: r * 0.86 + clearance })
-    if (built.animated) animated.push(built)
-    placed.push({ name, built, x, z, ry, box })
-    placedCount++
-    return built
-  }
 
-  // ── the island: sea to the horizon, a lawn plateau on a cliff, a forest belt round the rim ──
+  // ── the island ─────────────────────────────────────────────────────────────────────
   const SEA_Y = -6
   const ISLAND = { rx: 252, rz: 166, wall: 7, seed: 0x15a7 }
   const seaMat = new THREE.MeshStandardMaterial({ color: 0x2a6fb5, roughness: 0.55, metalness: 0.0, emissive: new THREE.Color(0x061e3a) })
   const sea = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5000), seaMat)
   sea.rotation.x = -P / 2
   sea.position.y = SEA_Y
-  sea.receiveShadow = false
   sea.name = 'sea'
   group.add(sea)
   const lawnMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.96, metalness: 0, map: lawnTexture() })
   lawnMat.map.repeat.set(1 / 26, 1 / 26)
   const cliffMat = new THREE.MeshStandardMaterial({ color: 0x9b8462, roughness: 1, metalness: 0 })
-  /** Island outline: an ellipse with three sine harmonics so it has bays and headlands. */
   const islandRadius = (() => {
     const rand = mulberry32(ISLAND.seed)
     const a1 = rand() * P * 2
@@ -329,9 +325,8 @@ export function buildCampus(scene, { shadows = true, detail = 'medium' } = {}) {
     return (t) => 1 + 0.05 * Math.sin(t * 2 + a1) + 0.035 * Math.sin(t * 3 + a2) + 0.02 * Math.sin(t * 7 + a3)
   })()
   const islandShape = new THREE.Shape()
-  const ISEG = 160
-  for (let i = 0; i <= ISEG; i++) {
-    const t = (i / ISEG) * P * 2
+  for (let i = 0; i <= 200; i++) {
+    const t = (i / 200) * P * 2
     const k = islandRadius(t)
     const px = Math.cos(t) * ISLAND.rx * k
     const pz = Math.sin(t) * ISLAND.rz * k
@@ -339,547 +334,725 @@ export function buildCampus(scene, { shadows = true, detail = 'medium' } = {}) {
     else islandShape.lineTo(px, pz)
   }
   const islandGeo = new THREE.ExtrudeGeometry(islandShape, { depth: ISLAND.wall, bevelEnabled: false, curveSegments: 1 })
-  islandGeo.rotateX(P / 2) // cap at y=0, wall down
+  islandGeo.rotateX(P / 2)
   const island = new THREE.Mesh(islandGeo, [lawnMat, cliffMat])
   island.receiveShadow = true
   island.name = 'island'
   group.add(island)
-  /** Inside the island edge by `inset` metres at heading t. */
   const rimPoint = (t, inset) => {
     const k = islandRadius(t)
     return { x: Math.cos(t) * (ISLAND.rx * k - inset), z: Math.sin(t) * (ISLAND.rz * k - inset * (ISLAND.rz / ISLAND.rx)) }
   }
-  // the forest belt: dense mixed trees in a band just inside the cliff edge
-  {
-    const rand = mulberry32(0xf0e57)
-    const N = 2600
-    for (let i = 0; i < N; i++) {
-      const t = rand() * P * 2
-      const inset = 6 + Math.pow(rand(), 1.4) * 34
-      const p = rimPoint(t, inset)
-      // keep the belt off the campus grid itself
-      if (Math.abs(p.x) < EXTENT.x + 6 && Math.abs(p.z) < EXTENT.z + 6) continue
-      if (Math.abs(p.x) < 150 && p.z < -100 && p.z > -142) continue // the schools row
-      const kind = rand() < 0.55 ? 'campustree' : rand() < 0.6 ? 'campustreetall' : 'campustreeflat'
-      stamp(kind, p.x, p.z, rand() * P * 2, 0.85 + rand() * 0.5)
-    }
+  /** Inside the island by at least `inset` metres (roughly). */
+  const inIsland = (x, z, inset = 0) => {
+    const t = Math.atan2(z / ISLAND.rz, x / ISLAND.rx)
+    const k = islandRadius(t)
+    const ex = x / (ISLAND.rx * k - inset)
+    const ez = z / (ISLAND.rz * k - inset * (ISLAND.rz / ISLAND.rx))
+    return ex * ex + ez * ez < 1
   }
 
-  // ── roads ──────────────────────────────────────────────────────────────────────────
-  const ROAD_W = 6
-  for (const z of ROADS_H) flats.push(flat(EXTENT.x * 2 + 10, ROAD_W, ROAD, 0, z))
-  for (const x of ROADS_V) flats.push(flat(ROAD_W, EXTENT.z * 2 + 10, ROAD, x, 0))
-  // the outer columns get a middle road so the west and east cells are two quads each
-  flats.push(flat(60, ROAD_W, ROAD, -150, 0))
-  flats.push(flat(60, ROAD_W, ROAD, 150, 0))
-  // avenues in and out of the plaza (north to the mentor quad, south to the gate)
-  flats.push(flat(9, 60, ROAD, 0, -70))
-  flats.push(flat(9, 60, ROAD, 0, 74))
-  // kerbs: a darker hairline either side of every road reads as a pavement from the air
-  for (const z of ROADS_H) for (const s of [-1, 1]) flats.push(flat(EXTENT.x * 2 + 10, 0.5, KERB, 0, z + s * (ROAD_W / 2 + 0.25), Y_ROAD + 0.005))
-  for (const x of ROADS_V) for (const s of [-1, 1]) flats.push(flat(0.5, EXTENT.z * 2 + 10, KERB, x + s * (ROAD_W / 2 + 0.25), 0, Y_ROAD + 0.005))
+  // ── the river: across the south-east corner, from the south coast to the east coast ───
+  const RIVER = { nx: 0.608, nz: 0.794, c: 168, half: 7, shore: 8.6, sMin: 0, sMax: 0 }
+  const RTX = RIVER.nz
+  const RTZ = -RIVER.nx
+  const meander = (s) => 3.2 * Math.sin(s / 29) + 1.2 * Math.sin(s / 11)
+  const riverS = (x, z) => x * RTX + z * RTZ
+  const riverOffset = (x, z) => x * RIVER.nx + z * RIVER.nz - RIVER.c - meander(riverS(x, z))
+  const riverPoint = (s, off = 0) => {
+    const c = RIVER.c + meander(s) + off
+    return { x: RIVER.nx * c + RTX * s, z: RIVER.nz * c + RTZ * s }
+  }
+  const riverWater = { name: 'river', inside: (x, z, pad = 0) => Math.abs(riverOffset(x, z)) < RIVER.shore + pad && inIsland(x, z, -4) }
+  {
+    let sMin = Infinity
+    let sMax = -Infinity
+    for (let s = -340; s <= 340; s += 1) {
+      const p = riverPoint(s)
+      if (inIsland(p.x, p.z, -1)) {
+        sMin = Math.min(sMin, s)
+        sMax = Math.max(sMax, s)
+      }
+    }
+    const pts = []
+    for (let s = sMin; s <= sMax; s += 4) pts.push({ ...riverPoint(s), s })
+    pts.push({ ...riverPoint(sMax), s: sMax })
+    F(ribbon(pts, RIVER.shore, SHORE, Y_SHORE))
+    F(ribbon(pts, RIVER.half, WATER, Y_WATER))
+    for (const p of pts) obstacles.push({ x: p.x, z: p.z, r: RIVER.half + 1 })
+    RIVER.sMin = sMin
+    RIVER.sMax = sMax
+    waters.push(riverWater)
+  }
+  const inWater = (x, z, pad = 0) => waters.some((w) => w.inside(x, z, pad))
+  /** A pond or lake: a seeded blob with a sandy shore. */
+  const lake = (name, x, z, r, seed) => {
+    F(blob(r + 1.5, x, z, seed, Y_SHORE, SHORE))
+    F(blob(r, x, z, seed, Y_WATER, WATER))
+    const rad = blobRadius(r + 1.5, seed)
+    waters.push({ name, x, z, r, inside: (px, pz, pad = 0) => Math.hypot(px - x, pz - z) < rad(Math.atan2(-(pz - z), px - x)) + pad })
+    obstacles.push({ x, z, r: r * 1.15 })
+  }
 
-  // ── plaza ──────────────────────────────────────────────────────────────────────────
-  flats.push(disc(PLAZA.inner, PAVE, 0, 0))
-  for (const r of PLAZA.rings) flats.push(ring(r - PLAZA.paths / 2, r + PLAZA.paths / 2, PAVE, 0, 0))
+  // ── fitting: nothing solid on roads, paving, pitches, water or another building ────────
+  const HARD = new Set([ROAD, PAVE, FIELD])
+  const boxHitsRects = (b, pad) => {
+    for (const r of rects) {
+      if (!HARD.has(r.color)) continue
+      if (b.max.x - pad > r.x - r.hw && b.min.x + pad < r.x + r.hw && b.max.z - pad > r.z - r.hd && b.min.z + pad < r.z + r.hd) return true
+    }
+    return false
+  }
+  const boxHitsWater = (b, pad) => {
+    const xs = [b.min.x + pad, (b.min.x + b.max.x) / 2, b.max.x - pad]
+    const zs = [b.min.z + pad, (b.min.z + b.max.z) / 2, b.max.z - pad]
+    for (const x of xs) for (const z of zs) if (inWater(x, z, 0.5)) return true
+    return false
+  }
+  const boxHitsSolids = (b, pad) => {
+    for (const s of solids) if (b.max.x - pad > s.min.x && b.min.x + pad < s.max.x && b.max.z - pad > s.min.z && b.min.z + pad < s.max.z) return true
+    return false
+  }
+  /** Place one piece. `solid` pieces are refused where they do not fit and block later ones. */
+  const place = (name, x, z, opts = {}) => {
+    const { ry = 0, district = 'grounds', seed, scale, clearance = 0.6, id, tag, palette, y = 0, solid = true, pad = 0.4, obstacle = true } = opts
+    const built = build(name, { district, seed: seed != null ? seed : hashStr(`${name}:${x}:${z}`), scale, shadows, palette })
+    if (!built) return null
+    built.root.position.set(x, tag === 'castle' ? 0.09 + y : y, z)
+    built.root.rotation.y = ry
+    built.root.userData.piece = name
+    built.root.userData.id = id || null
+    built.root.userData.tag = tag || null
+    built.root.updateMatrixWorld(true)
+    const box = new THREE.Box3().setFromObject(built.root)
+    if (solid && (boxHitsRects(box, pad) || boxHitsWater(box, pad) || boxHitsSolids(box, pad) || !inIsland(x, z, 4))) {
+      built.dispose()
+      rejected.push(name)
+      return null
+    }
+    group.add(built.root)
+    if (solid) solids.push(box)
+    const r = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) * 0.5
+    if (obstacle) obstacles.push({ x, z, r: r * 0.86 + clearance })
+    if (built.animated) animated.push(built)
+    placed.push({ name, built, x, z, ry, box })
+    placedCount++
+    return built
+  }
+  /** Try a piece at each candidate until one fits. */
+  const placeAny = (name, candidates, opts = {}) => {
+    for (const c of candidates) {
+      const b = place(name, c.x, c.z, { ...opts, ry: c.ry ?? opts.ry ?? 0 })
+      if (b) return b
+    }
+    return null
+  }
+  /** A Brain bridge scaled to span `span` metres, laid along heading `along` (0 = along x). */
+  const bridge = (name, x, z, along, span) => {
+    const b = build(name, { district: 'brain', seed: hashStr(`${name}${x}`), shadows })
+    if (!b) return null
+    const size = b.box.getSize(new THREE.Vector3())
+    const alongX = size.x >= size.z
+    const long = alongX ? size.x : size.z
+    const cross = alongX ? size.z : size.x
+    const base = b.root.scale.x
+    // stretch to the span, but keep the deck a road's width and the towers a sensible height
+    const k = span / long
+    const kc = Math.min(k, 10 / cross)
+    const ky = Math.min(k * 0.7, 9 / Math.max(0.1, size.y))
+    b.root.scale.set(base * (alongX ? k : kc), base * ky, base * (alongX ? kc : k))
+    b.root.position.set(x, 0.06, z)
+    b.root.rotation.y = along + (size.z > size.x ? P / 2 : 0)
+    b.root.userData.piece = name
+    group.add(b.root)
+    b.root.updateMatrixWorld(true)
+    const box = new THREE.Box3().setFromObject(b.root)
+    if (b.animated) animated.push(b)
+    placed.push({ name, built: b, x, z, ry: along, box })
+    placedCount++
+    return b
+  }
+
+  // ── roads: the grid, broken wherever the river runs, with a Brain bridge over each gap ──
+  const ROAD_W = 6
+  const RX = 183
+  const RZ = 103
+  /** Lay a straight road, skipping the river; returns the gaps it left. */
+  const lay = (horizontal, fixed, a0, a1, w = ROAD_W) => {
+    const runs = []
+    const gaps = []
+    let start = null
+    let gapStart = null
+    for (let a = a0; a <= a1 + 1e-6; a += 0.5) {
+      const wet = riverWater.inside(horizontal ? a : fixed, horizontal ? fixed : a, 1.2)
+      if (!wet) {
+        if (start === null) start = a
+        if (gapStart !== null) {
+          gaps.push({ a0: gapStart, a1: a })
+          gapStart = null
+        }
+      } else {
+        if (start !== null) {
+          runs.push([start, a])
+          start = null
+        }
+        if (gapStart === null) gapStart = a
+      }
+    }
+    if (start !== null) runs.push([start, a1])
+    for (const [p, q] of runs) {
+      if (q - p < 0.8) continue
+      const mid = (p + q) / 2
+      const len = q - p
+      F(horizontal ? flat(len, w, ROAD, mid, fixed) : flat(w, len, ROAD, fixed, mid))
+      for (const s of [-1, 1]) F(horizontal ? flat(len, 0.5, KERB, mid, fixed + s * (w / 2 + 0.25), Y_ROAD + 0.005) : flat(0.5, len, KERB, fixed + s * (w / 2 + 0.25), mid, Y_ROAD + 0.005))
+    }
+    return gaps
+  }
+  const ROADS_HZ = [-100, -55, 55, 100]
+  const ROADS_VX = [-180, -120, -60, 60, 120, 180]
+  const roadGaps = []
+  for (const z of ROADS_HZ) for (const g of lay(true, z, -RX, RX)) roadGaps.push({ x: (g.a0 + g.a1) / 2, z, along: 0, span: g.a1 - g.a0 + 7 })
+  for (const x of ROADS_VX) for (const g of lay(false, x, -RZ, RZ)) roadGaps.push({ x, z: (g.a0 + g.a1) / 2, along: P / 2, span: g.a1 - g.a0 + 7 })
+  lay(true, 0, -177, -123)
+  lay(true, 0, 123, 177)
+  const BRIDGES = ['suspensionbridge', 'suspensionbridge', 'suspensionbridge']
+  roadGaps.forEach((g, i) => {
+    const name = BRIDGES[i % BRIDGES.length]
+    bridge(name, g.x, g.z, g.along, g.span)
+    landmarks.push({ id: `bridge${i}`, name: name === 'suspensionbridge' ? 'Suspension Bridge' : name === 'stonearchbridge' ? 'Stone Bridge' : 'Truss Bridge', x: g.x, y: 12, z: g.z, kind: 'place' })
+  })
+
+  // ── the plaza ──────────────────────────────────────────────────────────────────────
+  F(disc(PLAZA.inner, PAVE, 0, 0))
+  for (const r of PLAZA.rings) F(ring(r - PLAZA.paths / 2, r + PLAZA.paths / 2, PAVE, 0, 0))
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * P * 2
     const len = PLAZA.r - PLAZA.inner + 4
     const mid = PLAZA.inner + len / 2 - 2
-    flats.push(flat(PLAZA.paths, len, PAVE, Math.sin(a) * mid, Math.cos(a) * mid, Y_PAVE, a))
+    F(flat(PLAZA.paths, len, PAVE, Math.sin(a) * mid, Math.cos(a) * mid, Y_PAVE, a))
   }
-  // the heart
-  place('greathall', 0, -31, { district: 'plaza', id: 'greathall', tag: 'hall' })
-  place('amphitheater', 0, 27, { district: 'plaza', ry: P, id: 'amphitheater', tag: 'amphitheater' })
-  place('centralbeacon', 0, 0, { district: 'plaza' })
-  place('grandfountain', 0, -14, { district: 'plaza' })
-  place('rocketstatue', 0, 12, { district: 'plaza' })
+  const onPlazaPath = (x, z, pad) => {
+    const r = Math.hypot(x, z)
+    if (r > PLAZA.r + 3) return false
+    if (r < PLAZA.inner + pad) return true
+    for (const rr of PLAZA.rings) if (Math.abs(r - rr) < PLAZA.paths / 2 + pad) return true
+    const a = Math.atan2(x, z)
+    const k = Math.round(a / (P / 4)) * (P / 4)
+    return Math.abs(Math.sin(a - k)) * r < PLAZA.paths / 2 + pad && Math.cos(a - k) > 0
+  }
+  const heart = { district: 'plaza', solid: false }
+  place('greathall', 0, -31, { ...heart, id: 'greathall', tag: 'hall' })
+  place('amphitheater', 0, 27, { ...heart, ry: P, id: 'amphitheater', tag: 'amphitheater' })
+  place('centralbeacon', 0, 0, heart)
+  place('grandfountain', 0, -15, heart)
+  place('rocketstatue', 0, 13, heart)
+  place('fountain', -9, 0, { ...heart, district: 'brain', scale: 1.7 * 0.8 })
+  place('fountain', 9, 0, { ...heart, district: 'brain', scale: 1.7 * 0.8 })
   for (let i = 0; i < 4; i++) {
     const a = P / 4 + (i * P) / 2
-    place('ringpavilion', Math.sin(a) * 32, Math.cos(a) * 32, { district: 'plaza', ry: -a })
+    place('ringpavilion', Math.sin(a) * 32, Math.cos(a) * 32, { ...heart, ry: -a })
   }
-  place('welcomegate', 0, 96, { district: 'plaza', id: 'gate', tag: 'gate' })
   for (let i = 0; i < 12; i++) {
     const a = (i / 12) * P * 2 + P / 24
-    stamp('lamppost', Math.sin(a) * 23.5, Math.cos(a) * 23.5, -a)
-    stamp('lamppost', Math.sin(a) * 45.5, Math.cos(a) * 45.5, -a)
+    stamp('lamppost', Math.sin(a) * 23.6, Math.cos(a) * 23.6, -a)
+    stamp('lamppost', Math.sin(a) * 45.6, Math.cos(a) * 45.6, -a)
   }
   for (let i = 0; i < 16; i++) {
     const a = (i / 16) * P * 2 + P / 32
-    stamp('parkbench', Math.sin(a) * 30.2, Math.cos(a) * 30.2, -a)
-    stamp('campustree', Math.sin(a) * 38, Math.cos(a) * 38, a)
+    stamp('parkbench', Math.sin(a) * 30.3, Math.cos(a) * 30.3, -a)
+    stamp('oaktree', Math.sin(a) * 38, Math.cos(a) * 38, a, 0.8)
   }
-  for (let i = 0; i < 40; i++) {
-    const a = (i / 40) * P * 2
-    const r = 17 + (i % 3) * 8
-    spots.plaza.push({ x: Math.sin(a) * r, z: Math.cos(a) * r })
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * P * 2 + P / 48
+    stamp('flowerbed', Math.sin(a) * 27, Math.cos(a) * 27, a, 0.7)
+  }
+  for (let i = 0; i < 96; i++) {
+    const rr = PLAZA.rings[i % 3]
+    const a = (i / 96) * P * 2
+    spots.plaza.push({ x: Math.sin(a) * rr, z: Math.cos(a) * rr })
+  }
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * P * 2
+    spots.plaza.push({ x: Math.sin(a) * 9, z: Math.cos(a) * 9 })
   }
 
-  // ── the main avenue: trees, lamps and flags to the gate ───────────────────────────
-  for (let z = 56; z <= 90; z += 6) {
+  // ── the avenues ────────────────────────────────────────────────────────────────────
+  const rimS = rimPoint(P / 2, 0).z
+  F(flat(9, 22, ROAD, 0, -63))
+  F(flat(9, rimS - 16 - 46, ROAD, 0, (46 + rimS - 16) / 2))
+  for (let z = 60; z <= rimS - 20; z += 7) {
     for (const s of [-1, 1]) {
-      stamp('campustree', s * 8, z, z)
-      if (z % 12 === 8) stamp('lamppost', s * 5.5, z, s > 0 ? -P / 2 : P / 2)
-      else stamp('flagpole', s * 5.5, z)
+      stamp('cherrytree', s * 8.5, z, z * s, 0.9)
+      if (z % 14 === 4) stamp('lamppost', s * 5.4, z, s > 0 ? -P / 2 : P / 2)
     }
+    spots.grounds.push({ x: z % 2 ? 2.5 : -2.5, z })
   }
-  for (let z = -56; z >= -90; z -= 6) for (const s of [-1, 1]) stamp('campustree', s * 8, z, z)
+  for (let z = -56; z >= -70; z -= 7) for (const s of [-1, 1]) stamp('cypresstree', s * 7.5, z, 0)
+  place('welcomegate', 0, 110, { district: 'plaza', id: 'gate', tag: 'gate', solid: false })
+  landmarks.push({ id: 'gate', name: 'Welcome Gate', x: 0, y: 8, z: 110, kind: 'gate' })
 
   // ── the mentor quad, north of the hall ─────────────────────────────────────────────
-  place('mentorshall', 0, -78, { district: 'plaza', id: 'mentorshall', tag: 'mentors' })
-  place('library', -30, -78, { district: 'plaza', ry: P / 2, id: 'library', tag: 'library' })
-  place('observatory', 30, -78, { district: 'plaza', ry: -P / 2, id: 'observatory', tag: 'observatory' })
-  place('clocktower', -18, -62, { district: 'plaza' })
-  place('lecturehall', 22, -62, { district: 'plaza', ry: P })
-  for (let x = -40; x <= 40; x += 8) stamp('campustree', x, -95, x)
-  for (let i = 0; i < 14; i++) spots.grounds.push({ x: -34 + i * 5, z: -70 })
+  place('mentorshall', 0, -82, { district: 'plaza', id: 'mentorshall', tag: 'mentors' })
+  place('library', -32, -80, { district: 'plaza', ry: P / 2, id: 'library', tag: 'library' })
+  place('observatory', 32, -80, { district: 'plaza', ry: -P / 2, id: 'observatory', tag: 'observatory' })
+  placeAny('clocktower', [{ x: -18, z: -66 }, { x: -22, z: -68 }], { district: 'plaza' })
+  placeAny('lecturehall', [{ x: 22, z: -67, ry: P }, { x: 44, z: -67, ry: P }], { district: 'plaza' })
+  place('sundial', -46, -64, { district: 'grounds', solid: false })
+  place('statueplinth', 48, -64, { district: 'grounds', solid: false })
+  for (let i = 0; i < 20; i++) spots.grounds.push({ x: -36 + (i % 10) * 8, z: i < 10 ? -70 : -93 })
+  landmarks.push({ id: 'greathall', name: 'The Great Hall', x: 0, y: 10, z: -31, kind: 'hall' })
+  landmarks.push({ id: 'amphitheater', name: 'The Amphitheater', x: 0, y: 5, z: 27, kind: 'amphitheater' })
+  landmarks.push({ id: 'mentorshall', name: 'Hall of Mentors', x: 0, y: 8, z: -82, kind: 'mentors' })
+  landmarks.push({ id: 'library', name: 'The Library', x: -32, y: 8, z: -80, kind: 'library' })
+  landmarks.push({ id: 'observatory', name: 'The Observatory', x: 32, y: 7, z: -80, kind: 'observatory' })
 
-  // ── the six districts ─────────────────────────────────────────────────────────────
-  const QUAD = {
-    perseverance: ['dormblock', 'dormblock', 'lecturehall', 'fieldhouse', 'courtyardhouse'],
-    creative: ['studiohall', 'sciencelab', 'courtyardhouse', 'dormblock', 'lecturehall'],
-    teamwork: ['courtyardhouse', 'courtyardhouse', 'cafepavilion', 'dormblock', 'lecturehall'],
-    economic: ['library', 'lecturehall', 'dormblock', 'dormblock', 'courtyardhouse'],
-    social: ['courtyardhouse', 'cafepavilion', 'lecturehall', 'dormblock', 'studiohall'],
-    environmental: ['greenhouse', 'greenhouse', 'sciencelab', 'dormblock', 'courtyardhouse'],
-  }
-  for (const castle of CASTLES) {
-    const d = DISTRICTS[castle.id]
-    const pose = castlePose(d)
-    const built = place(castle.piece, pose.x, pose.z, { district: castle.id, ry: pose.ry, id: castle.id, tag: 'castle', clearance: 1.2 })
-    if (built) {
-      castles.set(castle.id, { castle, built, x: pose.x, z: pose.z, ry: pose.ry })
-      pickables.push(built.root)
-    }
-    // forecourt paving in front of the castle, and the badge kiosks along it
-    const fx = Math.sin(pose.ry) * 1
-    const fz = Math.cos(pose.ry) * 1
-    const fore = 14 // forecourt depth
-    flats.push(flat(d.face === 'south' || d.face === 'north' ? 30 : 12, d.face === 'south' || d.face === 'north' ? 12 : 30, PAVE, pose.x + fx * fore, pose.z + fz * fore, Y_PAVE))
-    const n = castle.badges.length
-    const across = (i) => (i - (n - 1) / 2) * 2.4
-    for (let i = 0; i < n; i++) {
-      const ax = across(i)
-      // perpendicular to the facing direction
-      const px = pose.x + fx * (fore + 5) + Math.cos(pose.ry) * ax
-      const pz = pose.z + fz * (fore + 5) - Math.sin(pose.ry) * ax
-      const kiosk = place('badgepillar', px, pz, { district: castle.id, ry: pose.ry, palette: { ACCENT2: castle.accent }, id: `${castle.id}:${castle.badges[i]}`, tag: 'badge', clearance: 0.3, seed: hashStr(castle.badges[i]) })
-      if (kiosk) pickables.push(kiosk.root)
-    }
-    // two banners at the district gate
-    for (const s of [-1, 1]) {
-      const bx = pose.x + fx * (fore + 9) + Math.cos(pose.ry) * s * 6
-      const bz = pose.z + fz * (fore + 9) - Math.sin(pose.ry) * s * 6
-      place('castlebanner', bx, bz, { district: castle.id, ry: pose.ry })
-    }
-    // the quad: buildings along the two long edges of the cell, facing inward
-    const names = QUAD[castle.id]
-    const horizontal = d.face === 'south' || d.face === 'north'
-    const rand = mulberry32(hashStr(castle.id))
-    names.forEach((name, i) => {
-      const side = i % 2 ? 1 : -1
-      const along = -0.32 + Math.floor(i / 2) * 0.32
-      let x, z, ry
-      if (horizontal) {
-        x = d.cx + side * (d.w / 2 - 9)
-        z = d.cz + along * d.d * 0.9 + (d.face === 'south' ? 4 : -4)
-        ry = side > 0 ? -P / 2 : P / 2
-      } else {
-        x = d.cx + along * d.w * 0.9 + (d.face === 'east' ? 6 : -6)
-        z = d.cz + side * (d.d / 2 - 9)
-        ry = side > 0 ? P : 0
-      }
-      place(name, x, z, { district: castle.id, ry, seed: hashStr(`${castle.id}:${name}:${i}`) + Math.floor(rand() * 1000) })
-      spots[castle.id] = spots[castle.id] || []
-    })
-    // wander spots for the district's students: the forecourt and the lawn between buildings
-    const list = (spots[castle.id] = spots[castle.id] || [])
-    for (let i = 0; i < 24; i++) {
-      const ax = (rand() - 0.5) * 24
-      const az = 6 + rand() * 12
-      list.push({ x: pose.x + fx * az + Math.cos(pose.ry) * ax, z: pose.z + fz * az - Math.sin(pose.ry) * ax })
-    }
-    // trees along the cell's road edges and a few lamps
-    const tx0 = d.cx - d.w / 2 + 2.5
-    const tx1 = d.cx + d.w / 2 - 2.5
-    const tz0 = d.cz - d.d / 2 + 2.5
-    const tz1 = d.cz + d.d / 2 - 2.5
-    for (let x = tx0; x <= tx1; x += 7) {
-      stamp(rand() < 0.3 ? 'campustreetall' : 'campustree', x, tz0, x)
-      stamp(rand() < 0.3 ? 'campustreetall' : 'campustree', x, tz1, x + 1)
-    }
-    for (let z = tz0 + 7; z < tz1; z += 7) {
-      stamp('campustree', tx0, z, z)
-      stamp('campustree', tx1, z, z + 2)
-    }
+  // ── the south cell: market along the avenue, gardens, cafe, bandstand ───────────────
+  for (const s of [-1, 1]) {
+    F(flat(22, 22, PAVE, s * 15.5, 70, Y_PAVE))
+    for (const tx of [10, 19]) for (const tz of [64, 76]) place('markettent', s * tx, tz, { district: 'grounds', seed: hashStr(`tent${s}${tx}${tz}`), solid: false, ry: s > 0 ? -P / 2 : P / 2 })
+    place('gardenparterre', s * 42, 77, { district: 'grounds' })
     for (let i = 0; i < 4; i++) {
-      const ax = (i - 1.5) * 8
-      stamp('lamppost', pose.x + fx * (fore + 2) + Math.cos(pose.ry) * ax, pose.z + fz * (fore + 2) - Math.sin(pose.ry) * ax, pose.ry)
+      const a = (i / 4) * P * 2 + P / 4
+      place('hedgering', s * 42 + Math.cos(a) * 8.5, 77 + Math.sin(a) * 8.5, { district: 'grounds', solid: false })
     }
+    placeAny('foodtruck', [{ x: s * 32, z: 61, ry: s > 0 ? -P / 2 : P / 2 }, { x: s * 50, z: 61 }], { district: 'grounds' })
   }
+  placeAny('cafepavilion', [{ x: -16, z: 90 }, { x: -24, z: 90 }], { district: 'grounds' })
+  placeAny('bandstand', [{ x: 16, z: 90 }, { x: 24, z: 90 }], { district: 'grounds' })
+  for (let i = 0; i < 24; i++) spots.grounds.push({ x: (i % 2 ? 1 : -1) * (8 + (i % 4) * 5), z: 62 + (i % 6) * 3 })
+  landmarks.push({ id: 'market', name: 'The Market', x: -15, y: 5, z: 70, kind: 'place' })
+  landmarks.push({ id: 'gardens', name: 'The Gardens', x: 42, y: 3, z: 77, kind: 'place' })
 
-  // ── the creative district's hedge maze, in the corner of its cell ─────────────────
+  // ── the pitches ────────────────────────────────────────────────────────────────────
+  const pitch = (x, z) => {
+    const w = 36
+    const d = 24
+    F(flat(w + 4, d + 4, FIELD, x, z, Y_FIELD))
+    F(flat(w, 0.35, LINE, x, z - d / 2, Y_FIELD + 0.01))
+    F(flat(w, 0.35, LINE, x, z + d / 2, Y_FIELD + 0.01))
+    F(flat(0.35, d, LINE, x - w / 2, z, Y_FIELD + 0.01))
+    F(flat(0.35, d, LINE, x + w / 2, z, Y_FIELD + 0.01))
+    F(flat(0.35, d, LINE, x, z, Y_FIELD + 0.01))
+    F(ring(3.4, 3.75, LINE, x, z, Y_FIELD + 0.01, 48))
+    stamp('soccergoal', x - w / 2, z, P / 2, 1.4)
+    stamp('soccergoal', x + w / 2, z, -P / 2, 1.4)
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) stamp('floodlight', x + sx * (w / 2 + 2.5), z + sz * (d / 2 + 2.5), Math.atan2(-sx, -sz))
+    placeAny('stadiumstand', [{ x, z: z + d / 2 + 6, ry: P }], { district: 'grounds' })
+    placeAny('scoreboard', [{ x: x - w / 2 - 4.5, z, ry: P / 2 }], { district: 'grounds' })
+    for (let i = 0; i < 16; i++) spots.grounds.push({ x: x - 16 + (i % 8) * 4.5, z: z + (i < 8 ? -6 : 6) })
+  }
+  pitch(-150, 26)
+  pitch(150, 26)
+  landmarks.push({ id: 'pitches', name: 'Playing Fields', x: 150, y: 4, z: 26, kind: 'place' })
+
+  // ── the west column: the lake, the sports park, residences and the bus station ──────
+  lake('lake', -150, -78, 13.5, 11)
+  for (let i = 0; i < 14; i++) {
+    const a = (i / 14) * P * 2
+    stamp(i % 3 ? 'reedclump' : 'lilypads', -150 + Math.cos(a) * (i % 3 ? 11 : 7), -78 + Math.sin(a) * (i % 3 ? 11 : 7), a, 1)
+  }
+  place('canoe', -153, -80, { district: 'brain', ry: 0.6, y: Y_WATER, solid: false, obstacle: false })
+  place('rowboat', -145, -74, { district: 'grounds', ry: 2.1, y: Y_WATER, solid: false, obstacle: false })
+  placeAny('boatshed', [{ x: -127, z: -78, ry: -P / 2 }, { x: -171, z: -78, ry: P / 2 }], { district: 'grounds' })
+  placeAny('gazebo', [{ x: -170, z: -62 }, { x: -130, z: -62 }], { district: 'grounds' })
+  landmarks.push({ id: 'lake', name: 'The Lake', x: -150, y: 3, z: -78, kind: 'place' })
+  placeAny('tenniscourt', [{ x: -165, z: -44 }], { district: 'grounds' })
+  placeAny('tenniscourt', [{ x: -165, z: -31 }], { district: 'grounds' })
+  placeAny('swimmingpool', [{ x: -136, z: -42 }], { district: 'grounds' })
+  placeAny('sportshall', [{ x: -137, z: -16 }, { x: -140, z: -18 }], { district: 'grounds' })
+  placeAny('skatepark', [{ x: -165, z: -14 }], { district: 'grounds' })
+  for (let i = 0; i < 16; i++) spots.grounds.push({ x: -172 + (i % 8) * 6, z: i < 8 ? -24 : -52 })
+  landmarks.push({ id: 'sportspark', name: 'Sports Park', x: -150, y: 4, z: -30, kind: 'place' })
+  placeAny('dormtower', [{ x: -168, z: 67 }], { district: 'grounds' })
+  placeAny('dormtower', [{ x: -168, z: 87 }], { district: 'grounds' })
+  placeAny('busstation', [{ x: -140, z: 68, ry: P / 2 }, { x: -140, z: 70 }], { district: 'grounds' })
+  placeAny('campusbus', [{ x: -133, z: 86, ry: 0 }], { district: 'grounds' })
+  placeAny('campusbus', [{ x: -143, z: 87, ry: 0.1 }], { district: 'grounds' })
+  placeAny('bikeshed', [{ x: -153, z: 90 }], { district: 'grounds' })
+  for (let i = 0; i < 10; i++) spots.grounds.push({ x: -170 + i * 5, z: 78 })
+
+  // ── the east column: the pond, the science park, the playground by the river ─────────
+  lake('pond', 150, -78, 12.5, 21)
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * P * 2
+    stamp(i % 2 ? 'reedclump' : 'lilypads', 150 + Math.cos(a) * (i % 2 ? 10 : 6), -78 + Math.sin(a) * (i % 2 ? 10 : 6), a, 1)
+  }
+  place('lilypond', 172, -62, { district: 'brain', solid: false })
+  for (let i = 0; i < 3; i++) placeAny('beehive', [{ x: 128 + i * 4, z: -63 }], { district: 'brain' })
+  landmarks.push({ id: 'pond', name: 'The Pond', x: 150, y: 3, z: -78, kind: 'place' })
+  placeAny('sciencetower', [{ x: 135, z: -40 }], { district: 'grounds' })
+  placeAny('greenhousedome', [{ x: 160, z: -43 }], { district: 'grounds' })
+  placeAny('watertower', [{ x: 170, z: -22 }], { district: 'grounds' })
+  for (let i = 0; i < 4; i++) placeAny('solarfield', [{ x: 132 + i * 7.5, z: -15 }], { district: 'grounds' })
+  for (let i = 0; i < 12; i++) spots.grounds.push({ x: 128 + (i % 6) * 8, z: i < 6 ? -28 : -52 })
+  landmarks.push({ id: 'sciencepark', name: 'Science Park', x: 150, y: 10, z: -32, kind: 'place' })
+  placeAny('playground', [{ x: 132, z: 68 }, { x: 134, z: 72 }], { district: 'grounds' })
+  placeAny('treehouse', [{ x: 131, z: 88 }, { x: 144, z: 64 }], { district: 'grounds' })
+  placeAny('foodtruck', [{ x: 145, z: 80, ry: 0.4 }], { district: 'grounds' })
+
+  // ── the six castle districts ───────────────────────────────────────────────────────
+  const CELLS = {
+    perseverance: { x0: -117, x1: -63, z0: -97, z1: -58 },
+    creative: { x0: 63, x1: 117, z0: -97, z1: -58 },
+    teamwork: { x0: -117, x1: -63, z0: -52, z1: -3 },
+    economic: { x0: 63, x1: 117, z0: -52, z1: -3 },
+    social: { x0: -117, x1: -63, z0: 3, z1: 52 },
+    environmental: { x0: 63, x1: 117, z0: 3, z1: 52 },
+  }
+  const QUAD = {
+    perseverance: ['meditationhall', 'dormtower', 'bellpavilion', 'courtyardhouse', 'lecturehall'],
+    creative: ['artmuseum', 'studiohall', 'lecturecomplex', 'sciencelab'],
+    teamwork: ['studentunion', 'courtyardhouse', 'cafepavilion', 'dormblock', 'lecturehall'],
+    economic: ['librarywing', 'lecturecomplex', 'dormtower', 'courtyardhouse'],
+    social: ['dininghall', 'bellpavilion', 'courtyardhouse', 'dormblock', 'lecturehall'],
+    environmental: ['greenhouse', 'solarfield', 'greenhousedome', 'dormblock', 'windmill'],
+  }
+  // the creative district's hedge maze, reserved before anything else is fitted
   {
-    const d = DISTRICTS.creative
-    const mx = d.cx + d.w / 2 - 10
-    const mz = d.cz + d.d / 2 - 8
-    for (let r = 2; r <= 8; r += 2) {
-      const gapAt = Math.floor(hashStr(`maze${r}`) % 16)
-      const n = Math.max(12, Math.round(r * 5))
+    const mx = 108
+    const mz = -88
+    for (let r = 2; r <= 7; r += 1.7) {
+      const gapAt = Math.floor(hashStr(`maze${r}`) % 12)
+      const n = Math.max(10, Math.round(r * 6))
       for (let i = 0; i < n; i++) {
-        if (i % 16 === gapAt) continue
+        if (i % 12 === gapAt) continue
         const a = (i / n) * P * 2
         stamp('hedgestraight', mx + Math.cos(a) * r, mz + Math.sin(a) * r, -a, 0.6)
       }
     }
-    obstacles.push({ x: mx, z: mz, r: 9.5 })
+    solids.push(new THREE.Box3(new THREE.Vector3(mx - 8, 0, mz - 8), new THREE.Vector3(mx + 8, 3, mz + 8)))
+    reserved.push({ x: mx, z: mz, r: 8 })
+    obstacles.push({ x: mx, z: mz, r: 8 })
+    landmarks.push({ id: 'maze', name: 'The Maze', x: mx, y: 3, z: mz, kind: 'place' })
   }
-
-  // ── the south strip: formal gardens, parterres, cafe and gazebos ──────────────────
-  {
-    for (const [x, z] of [[-30, 70], [-30, 88], [30, 70], [30, 88]]) {
-      place('gardenparterre', x, z, { district: 'grounds' })
-      for (let i = 0; i < 4; i++) {
-        const a = (i / 4) * P * 2 + P / 4
-        place('hedgering', x + Math.cos(a) * 9, z + Math.sin(a) * 9, { district: 'grounds' })
-      }
-    }
-    place('cafepavilion', -46, 78, { district: 'grounds', ry: P / 2 })
-    place('gazebo', 46, 70, { district: 'grounds' })
-    place('gazebo', 46, 88, { district: 'grounds' })
-    for (let i = 0; i < 20; i++) spots.grounds.push({ x: -40 + (i % 10) * 9, z: 64 + Math.floor(i / 10) * 26 })
-  }
-
-  // ── far west: the lake, a pitch and dorm rows ──────────────────────────────────────
-  {
-    const lx = -150
-    const lz = -62
-    flats.push(blob(27, lx, lz, 11, Y_SHORE, SHORE))
-    flats.push(blob(25.5, lx, lz, 11, Y_WATER, WATER))
-    obstacles.push({ x: lx, z: lz, r: 29 })
-    place('boathouse', lx + 16, lz + 20, { district: 'grounds', ry: -P * 0.8 })
-    place('pier', lx - 10, lz + 22, { district: 'grounds', ry: 0.2 })
-    place('sailboat', lx - 4, lz - 4, { district: 'grounds', ry: 0.7 })
-    place('rowboat', lx - 14, lz + 16, { district: 'grounds', ry: 1.4 })
-    place('footbridge', lx + 24, lz - 12, { district: 'grounds', ry: P / 2 })
-    for (let i = 0; i < 10; i++) {
-      const a = (i / 10) * P * 2
-      stamp('campustreeflat', lx + Math.cos(a) * 31, lz + Math.sin(a) * 31, a)
-    }
-    pitch(-150, 27, 0)
-    for (let i = 0; i < 3; i++) place('dormblock', -168 + i * 18, 72, { district: 'grounds', seed: 400 + i })
-    for (let i = 0; i < 3; i++) place('dormblock', -168 + i * 18, 88, { district: 'grounds', ry: P, seed: 500 + i })
-    place('shuttlestop', -130, 60, { district: 'grounds', ry: P })
-    for (let i = 0; i < 12; i++) spots.grounds.push({ x: -170 + i * 4, z: 80 })
-  }
-
-  // ── far east: two ponds, a lab quad and two pitches ───────────────────────────────
-  {
-    for (const [px, pz, r, seed] of [[152, -78, 14, 21], [166, -46, 9, 22]]) {
-      flats.push(blob(r + 1.5, px, pz, seed, Y_SHORE, SHORE))
-      flats.push(blob(r, px, pz, seed, Y_WATER, WATER))
-      obstacles.push({ x: px, z: pz, r: r + 2 })
-      for (let i = 0; i < 6; i++) {
-        const a = (i / 6) * P * 2
-        stamp('campustreeflat', px + Math.cos(a) * (r + 4), pz + Math.sin(a) * (r + 4), a)
-      }
-    }
-    place('footbridge', 159, -62, { district: 'grounds', ry: 0.6 })
-    place('sciencelab', 135, -25, { district: 'grounds' })
-    place('sciencelab', 165, -25, { district: 'grounds' })
-    place('lecturehall', 150, -42, { district: 'grounds', ry: 0 })
-    place('greenhouse', 150, -10, { district: 'grounds', ry: P })
-    pitch(150, 30, 0)
-    pitch(150, 78, 0)
-    place('shuttlestop', 128, 60, { district: 'grounds', ry: P })
-    for (let i = 0; i < 12; i++) spots.grounds.push({ x: 128 + i * 4, z: -30 })
-  }
-
-  // ── south-west and south-east corner cells: more residence rows ───────────────────
-  for (let i = 0; i < 3; i++) place('courtyardhouse', -108 + i * 18, 72, { district: 'teamwork', seed: 600 + i })
-  for (let i = 0; i < 3; i++) place('dormblock', -108 + i * 18, 90, { district: 'teamwork', ry: P, seed: 700 + i })
-  for (let i = 0; i < 3; i++) place('courtyardhouse', 72 + i * 18, 72, { district: 'environmental', seed: 800 + i })
-  for (let i = 0; i < 3; i++) place('dormblock', 72 + i * 18, 90, { district: 'environmental', ry: P, seed: 900 + i })
-  place('fieldhouse', -90, -105, { district: 'grounds' })
-  place('studiohall', 90, -105, { district: 'grounds' })
-
-  // trees along the big roads
-  for (const z of ROADS_H) for (let x = -EXTENT.x; x <= EXTENT.x; x += 9) for (const s of [-1, 1]) if (Math.abs(x) > 6 || Math.abs(z) > 50) stamp('campustree', x + (s > 0 ? 3 : 0), z + s * 5.5, x * s)
-  for (const x of ROADS_V) for (let z = -EXTENT.z; z <= EXTENT.z; z += 9) for (const s of [-1, 1]) if (!(Math.abs(x) === 60 && Math.abs(z) < 50 && false)) stamp(Math.abs(x) === 60 ? 'campustreetall' : 'campustree', x + s * 5.5, z + (s > 0 ? 3 : 0), z * s)
-
-  // ── pitches ────────────────────────────────────────────────────────────────────────
-  function pitch(x, z, ry) {
-    const w = 36
-    const d = 24
-    flats.push(flat(w + 4, d + 4, FIELD, x, z, Y_FIELD, ry))
-    flats.push(flat(w, 0.35, LINE, x, z - d / 2, Y_FIELD + 0.01, ry))
-    flats.push(flat(w, 0.35, LINE, x, z + d / 2, Y_FIELD + 0.01, ry))
-    flats.push(flat(0.35, d, LINE, x - w / 2, z, Y_FIELD + 0.01, ry))
-    flats.push(flat(0.35, d, LINE, x + w / 2, z, Y_FIELD + 0.01, ry))
-    flats.push(flat(0.35, d, LINE, x, z, Y_FIELD + 0.01, ry))
-    flats.push(ring(3.4, 3.75, LINE, x, z, Y_FIELD + 0.01, 48))
-    stamp('soccergoal', x - w / 2, z, P / 2, 1.4)
-    stamp('soccergoal', x + w / 2, z, -P / 2, 1.4)
-    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) stamp('floodlight', x + sx * (w / 2 + 3), z + sz * (d / 2 + 3), Math.atan2(-sx, -sz))
-    stamp('bleacher', x, z - d / 2 - 4, P)
-    stamp('bleacher', x, z + d / 2 + 4, 0)
-    obstacles.push({ x, z, r: 0 })
-    for (let i = 0; i < 8; i++) spots.grounds.push({ x: x - 14 + i * 4, z: z + (i % 2 ? 4 : -4) })
-  }
-
-  // ── the canal and the harbour along the south shore ───────────────────────────────
-  {
-    const pts = []
-    for (let x = -235; x <= 235; x += 10) pts.push({ x, z: 122 + Math.sin(x / 41) * 4 + Math.sin(x / 13) * 1.2 })
-    flats.push(ribbon(pts, 8.5, SHORE, Y_SHORE))
-    flats.push(ribbon(pts, 7, WATER, Y_WATER))
-    for (const p of pts) obstacles.push({ x: p.x, z: p.z, r: 8 })
-    flats.push(blob(16, 0, 121, 31, Y_SHORE, SHORE))
-    flats.push(blob(14.5, 0, 121, 31, Y_WATER, WATER))
-    obstacles.push({ x: 0, z: 121, r: 16 })
-    place('pier', -9, 110, { district: 'grounds', ry: 0.15 })
-    place('pier', 9, 110, { district: 'grounds', ry: -0.15 })
-    place('rowboat', -4, 118, { district: 'grounds', ry: 0.6 })
-    place('sailboat', 6, 124, { district: 'grounds', ry: 2.2 })
-    place('footbridge', -40, 122, { district: 'grounds', ry: P / 2 + 0.12 })
-    place('footbridge', 40, 121, { district: 'grounds', ry: P / 2 - 0.1 })
-    place('footbridge', -120, 124, { district: 'grounds', ry: P / 2 })
-    place('footbridge', 120, 121, { district: 'grounds', ry: P / 2 })
-    for (let x = -200; x <= 200; x += 11) {
-      if (Math.abs(x) < 20) continue
-      stamp('lamppost', x, 112, 0)
-      stamp(x % 22 === 0 ? 'campustreeflat' : 'campustree', x + 4, 133, x)
-    }
-    place('cafepavilion', -24, 108, { district: 'grounds', ry: 0 })
-    place('gazebo', 24, 108, { district: 'grounds' })
-    for (let i = 0; i < 10; i++) spots.grounds.push({ x: -50 + i * 11, z: 108 })
-  }
-
-  // ── the market: striped tents by the gardens, as in the reference ──────────────────
-  for (let i = 0; i < 8; i++) {
-    const x = -14 + (i % 4) * 9.5
-    const z = 62 + Math.floor(i / 4) * 9
-    place('markettent', x, z, { district: 'grounds', seed: 300 + i })
-  }
-  flats.push(flat(42, 22, PAVE, 0, 66.5, Y_PAVE))
-  for (let i = 0; i < 8; i++) spots.grounds.push({ x: -16 + i * 4.5, z: 66 })
-
-  // ── denser quads: a second row of buildings and paved courts in every district ──────
   for (const castle of CASTLES) {
     const d = DISTRICTS[castle.id]
+    const cell = CELLS[castle.id]
+    const pose = castlePose(d)
+    const fx = Math.sin(pose.ry)
+    const fz = Math.cos(pose.ry)
     const horizontal = d.face === 'south' || d.face === 'north'
-    const extra = ['dormblock', 'courtyardhouse', 'lecturehall']
-    const rand = mulberry32(hashStr(castle.id + 'extra'))
-    extra.forEach((name, i) => {
-      const along = -0.3 + i * 0.3
-      let x, z, ry
-      if (horizontal) {
-        z = d.cz + (d.face === 'south' ? -d.d / 2 + 5 : d.d / 2 - 5)
-        x = d.cx + along * d.w * 0.8
-        ry = d.face === 'south' ? 0 : P
-        if (Math.abs(x - d.cx) < 14) return // the castle stands here
-      } else {
-        x = d.cx + (d.face === 'east' ? -d.w / 2 + 5 : d.w / 2 - 5)
-        z = d.cz + along * d.d * 0.8
-        ry = d.face === 'east' ? -P / 2 : P / 2
-        if (Math.abs(z - d.cz) < 14) return
+    const fore = 14
+    F(flat(horizontal ? 30 : 12, horizontal ? 12 : 30, PAVE, pose.x + fx * fore, pose.z + fz * fore, Y_PAVE))
+    const built = place(castle.piece, pose.x, pose.z, { district: castle.id, ry: pose.ry, id: castle.id, tag: 'castle', clearance: 1.2, solid: false })
+    if (built) {
+      solids.push(new THREE.Box3().setFromObject(built.root))
+      castles.set(castle.id, { castle, built, x: pose.x, z: pose.z, ry: pose.ry })
+      pickables.push(built.root)
+      landmarks.push({ id: castle.id, name: `Castle of ${castle.short}`, x: pose.x, y: 13, z: pose.z, kind: 'castle', accent: castle.accent })
+    }
+    const n = castle.badges.length
+    for (let i = 0; i < n; i++) {
+      const ax = (i - (n - 1) / 2) * 2.4
+      const px = pose.x + fx * (fore + 3) + Math.cos(pose.ry) * ax
+      const pz = pose.z + fz * (fore + 3) - Math.sin(pose.ry) * ax
+      const kiosk = place('badgepillar', px, pz, { district: castle.id, ry: pose.ry, palette: { ACCENT2: castle.accent }, id: `${castle.id}:${castle.badges[i]}`, tag: 'badge', clearance: 0.3, seed: hashStr(castle.badges[i]), solid: false })
+      if (kiosk) pickables.push(kiosk.root)
+    }
+    for (const s of [-1, 1]) {
+      place('castlebanner', pose.x + fx * (fore - 4) + Math.cos(pose.ry) * s * 13, pose.z + fz * (fore - 4) - Math.sin(pose.ry) * s * 13, { district: castle.id, ry: pose.ry, solid: false })
+      stamp('topiaryball', pose.x + fx * (fore - 7) + Math.cos(pose.ry) * s * 9, pose.z + fz * (fore - 7) - Math.sin(pose.ry) * s * 9, 0, 1)
+    }
+    const rand = mulberry32(hashStr(castle.id))
+    const slots = []
+    for (let x = cell.x0 + 7; x <= cell.x1 - 7; x += 6.5) for (let z = cell.z0 + 6; z <= cell.z1 - 6; z += 6.5) slots.push({ x, z })
+    slots.sort(() => rand() - 0.5)
+    const cx = (cell.x0 + cell.x1) / 2
+    const cz = (cell.z0 + cell.z1) / 2
+    for (const name of QUAD[castle.id]) {
+      for (const s of slots) {
+        const ry = Math.round(Math.atan2(cx - s.x, cz - s.z) / (P / 2)) * (P / 2)
+        if (place(name, s.x, s.z, { district: castle.id, ry, seed: hashStr(`${castle.id}:${name}`), pad: 0.2 })) break
       }
-      place(name, x, z, { district: castle.id, ry, seed: hashStr(`${castle.id}:x:${name}`) + Math.floor(rand() * 999) })
-    })
-    const cx = d.cx + (horizontal ? 0 : d.face === 'east' ? 6 : -6)
-    const cz = d.cz + (horizontal ? (d.face === 'south' ? 8 : -8) : 0)
-    flats.push(flat(horizontal ? 16 : 10, horizontal ? 10 : 16, PAVE, cx, cz, Y_PAVE))
-    stamp('parkbench', cx - 4, cz + 3, 0)
-    stamp('parkbench', cx + 4, cz - 3, P)
-    stamp('bikerack', cx + 5, cz + 4, P / 2)
-    stamp('signpost', cx - 5, cz - 4, rand() * 3)
+    }
+    for (const name of ['noticeboard', 'phonebooth', 'bikerack', 'parkbench', 'parkbench']) {
+      for (let tries = 0; tries < 20; tries++) {
+        const x = cell.x0 + 4 + rand() * (cell.x1 - cell.x0 - 8)
+        const z = cell.z0 + 4 + rand() * (cell.z1 - cell.z0 - 8)
+        if (place(name, x, z, { district: castle.id, ry: rand() * P * 2, pad: 0 })) break
+      }
+    }
+    const list = (spots[castle.id] = [])
+    for (let i = 0; i < 40; i++) {
+      const ax = (rand() - 0.5) * 26
+      const az = fore - 5 + rand() * 11
+      list.push({ x: pose.x + fx * az + Math.cos(pose.ry) * ax, z: pose.z + fz * az - Math.sin(pose.ry) * ax })
+    }
+    for (let i = 0; i < 20; i++) list.push({ x: cell.x0 + 3 + rand() * (cell.x1 - cell.x0 - 6), z: cell.z0 + 3 + rand() * (cell.z1 - cell.z0 - 6) })
   }
 
-  // ── natural planting: groves, copses, hedgerows, bushes at every building, beds ──────
-  {
-    const rand = mulberry32(0x9e1d)
-    const ROAD_HALF = ROAD_W / 2 + 2.2
-    const nearRoad = (x, z) => {
-      for (const rz of ROADS_H) if (Math.abs(z - rz) < ROAD_HALF && Math.abs(x) <= EXTENT.x + 6) return true
-      for (const rx of ROADS_V) if (Math.abs(x - rx) < ROAD_HALF && Math.abs(z) <= EXTENT.z + 6) return true
-      if (Math.abs(x) < 6.5 && Math.abs(z) > 48 && Math.abs(z) < 104) return true // the avenues
-      if (Math.abs(z) < ROAD_HALF && Math.abs(x) > 118 && Math.abs(x) < 182) return true // the middle roads
-      const r = Math.hypot(x, z)
-      if (r < PLAZA.r + 4) return true // the whole plaza is laid out by hand
-      return false
-    }
-    const inIsland = (x, z) => {
-      const t = Math.atan2(z / ISLAND.rz, x / ISLAND.rx)
-      const k = islandRadius(t)
-      return (x / (ISLAND.rx * k)) ** 2 + (z / (ISLAND.rz * k)) ** 2 < 1
-    }
-    const pitchRects = [[-150, 27], [150, 30], [150, 78]].map(([x, z]) => ({ x, z, w: 22, d: 16 }))
-    const flatRects = [{ x: 0, z: 66.5, w: 23, d: 13 }, { x: 0, z: 84, w: 40, d: 26 }, { x: 0, z: -121, w: 150, d: 20 }] // market + gardens + schools
-    const inRect = (x, z, r) => Math.abs(x - r.x) < r.w && Math.abs(z - r.z) < r.d
-    const obstaclesNow = obstacles.slice() // buildings, water, kiosks; the belt trees come later
-    const blocked = (x, z, pad = 1.2) => {
-      if (!inIsland(x, z) || nearRoad(x, z)) return true
-      for (const r of pitchRects) if (inRect(x, z, r)) return true
-      for (const r of flatRects) if (inRect(x, z, r)) return true
-      for (const o of obstaclesNow) {
-        const d = o.r + pad
-        if (Math.abs(o.x - x) < d && Math.abs(o.z - z) < d && (o.x - x) ** 2 + (o.z - z) ** 2 < d * d) return true
-      }
-      return false
-    }
-    const SPECIES = ['campustree', 'campustree', 'campustree', 'campustreeflat', 'campustreetall']
-    let planted = 0
-    const tree = (x, z, kind, sMin = 0.8, sMax = 1.35) => {
-      if (blocked(x, z, 0.9)) return false
-      stamp(kind, x, z, rand() * P * 2, sMin + rand() * (sMax - sMin))
-      obstaclesNow.push({ x, z, r: 0.8 })
-      planted++
-      return true
-    }
-    // groves: a seed point on the lawn, then a clump of mostly one species
-    for (let g = 0; g < 140; g++) {
-      const gx = (rand() - 0.5) * 2 * (EXTENT.x + 40)
-      const gz = (rand() - 0.5) * 2 * (EXTENT.z + 40)
-      if (blocked(gx, gz, 3)) continue
-      const main = SPECIES[Math.floor(rand() * SPECIES.length)]
-      const n = 6 + Math.floor(rand() * 22)
-      const radius = 5 + rand() * 11
-      for (let i = 0; i < n; i++) {
-        const a = rand() * P * 2
-        const r = Math.sqrt(rand()) * radius
-        const kind = rand() < 0.78 ? main : SPECIES[Math.floor(rand() * SPECIES.length)]
-        tree(gx + Math.cos(a) * r, gz + Math.sin(a) * r, kind)
-      }
-    }
-    // scattered singles and pairs across the lawns
-    for (let i = 0; i < 900; i++) {
-      const x = (rand() - 0.5) * 2 * (EXTENT.x + 30)
-      const z = (rand() - 0.5) * 2 * (EXTENT.z + 30)
-      if (tree(x, z, SPECIES[Math.floor(rand() * SPECIES.length)]) && rand() < 0.35) tree(x + 2 + rand() * 2, z + (rand() - 0.5) * 3, SPECIES[Math.floor(rand() * SPECIES.length)])
-    }
-    // water edges: willow-ish flat trees and hedges round the lake and ponds
-    for (const [cx, cz, r] of [[-150, -62, 27], [152, -78, 15.5], [166, -46, 10.5]]) {
-      for (let i = 0; i < r * 1.6; i++) {
-        const a = rand() * P * 2
-        const rr = r + 1.5 + rand() * 6
-        tree(cx + Math.cos(a) * rr, cz + Math.sin(a) * rr, rand() < 0.6 ? 'campustreeflat' : 'campustree', 0.7, 1.2)
-      }
-    }
-    // bushes at the base of every building and along the forecourts; hedges round the courts
-    for (const pl of placed) {
-      if (pl.name.startsWith('castle') || pl.name === 'badgepillar' || pl.name === 'castlebanner' || pl.name === 'pier' || pl.name === 'footbridge' || pl.name === 'sailboat' || pl.name === 'rowboat') continue
-      const hw = (pl.box.max.x - pl.box.min.x) / 2 + 0.9
-      const hd = (pl.box.max.z - pl.box.min.z) / 2 + 0.9
-      const n = 3 + Math.floor(rand() * 5)
-      for (let i = 0; i < n; i++) {
-        const side = Math.floor(rand() * 4)
-        const t = (rand() - 0.5) * 2
-        const x = pl.x + (side === 0 ? -hw : side === 1 ? hw : t * hw)
-        const z = pl.z + (side === 2 ? -hd : side === 3 ? hd : t * hd)
-        if (nearRoad(x, z) || !inIsland(x, z)) continue
-        stamp('hedgestraight', x, z, rand() * P, 0.45 + rand() * 0.5)
-      }
-    }
-    // flower beds on the plaza lawns and at the district gates
-    for (let i = 0; i < 24; i++) {
-      const a = (i / 24) * P * 2 + P / 48
-      const r = i % 2 ? 27 : 38
-      stamp('hedgering', Math.sin(a) * r, Math.cos(a) * r, a, 0.45)
-    }
-    for (const [, c] of castles) {
-      for (let i = 0; i < 6; i++) {
-        const ax = (i - 2.5) * 5
-        const px = c.x + Math.sin(c.ry) * 9 + Math.cos(c.ry) * ax
-        const pz = c.z + Math.cos(c.ry) * 9 - Math.sin(c.ry) * ax
-        stamp('hedgering', px, pz, 0, 0.4)
-      }
-    }
-    // hedgerows along the outer roads, broken by gaps
-    for (const rz of ROADS_H) for (let x = -EXTENT.x; x <= EXTENT.x; x += 1.02) {
-      if (Math.abs(x) < 8 || rand() < 0.12) continue
-      if (Math.floor((x + 400) / 30) % 3 === 0) continue
-      stamp('hedgestraight', x, rz + (rz > 0 ? 1 : -1) * (ROAD_W / 2 + 1.4), 0, 0.6)
-    }
-    console.log('[campus] planted', planted, 'trees in groves and singles')
+  // ── the halls and residences along the south ring ──────────────────────────────────
+  for (const s of [-1, 1]) {
+    const names = s < 0 ? ['studentunion', 'dininghall', 'courtyardhouse', 'dormblock', 'dormblock', 'bikeshed'] : ['artmuseum', 'meditationhall', 'courtyardhouse', 'dormtower', 'dormblock', 'bikeshed']
+    const slots = []
+    for (let x = 69; x <= 111; x += 7) for (let z = 64; z <= 91; z += 9) slots.push({ x: s * x, z })
+    for (const name of names) for (const sl of slots) if (place(name, sl.x, sl.z, { district: s < 0 ? 'teamwork' : 'environmental', ry: sl.z > 78 ? P : 0, pad: 0.2 })) break
+    for (let i = 0; i < 12; i++) spots.grounds.push({ x: s * (68 + i * 4), z: 78 })
   }
+  for (const s of [-1, 1]) for (let i = 0; i < 6; i++) spots.grounds.push({ x: s * (70 + i * 8), z: -104 })
 
-  // ── the Schools: eight of the JARVIS Brain's worlds as themed plazas on the north shore ──
-  // Each is a paved court with a headline model in the middle and its ring pieces around it,
-  // built with the brain's own palette. They show what is already built: click one to open
-  // that world in the Brain.
+  // ── the Schools on the north shore ─────────────────────────────────────────────────
   const SCHOOLS = [
     { id: 'dinosaurs', name: 'Dinosaurs', hero: 'dinoskeleton', ring: ['fossildig', 'fossilslab', 'treeoflife'], palette: 'brain' },
     { id: 'science', name: 'Science', hero: 'vandegraaff', ring: ['chemistryset', 'microscope', 'atom', 'telescope'], palette: 'brain' },
     { id: 'geography', name: 'Geography', hero: 'globe', ring: ['volcano', 'stratacutaway', 'compass', 'geode'], palette: 'brain' },
     { id: 'anatomy', name: 'Anatomy', hero: 'heart', ring: ['skull', 'skeletonarm', 'spine', 'lungs', 'brainlobes'], palette: 'brain' },
-    { id: 'maya', name: 'The Maya', hero: 'mayapyramid', ring: ['stelae'], palette: 'brain' },
+    { id: 'maya', name: 'The Maya', hero: 'mayapyramid', ring: ['stelae', 'obelisk'], palette: 'brain' },
     { id: 'castles', name: 'Castles', hero: 'concentriccastle', ring: ['motteandbailey', 'japanesecastle', 'crusadercastle', 'trebuchet'], palette: 'medieval' },
     { id: 'recipes', name: 'Recipes', hero: 'pizzaoven', ring: ['bakery', 'millstone', 'picnictable', 'mealbench', 'spicerack'], palette: 'brain' },
     { id: 'space', name: 'Space', hero: 'saturnv', ring: ['iss', 'jwst', 'hubble', 'launchpad', 'marsrover', 'moonbase'], palette: 'space' },
   ]
-  const SCHOOL_Z = -121
-  const SCHOOL_STEP = 36
-  const schoolMarks = []
+  const SCHOOL_Z = -120
+  const SCHOOL_STEP = 35
   SCHOOLS.forEach((sc, i) => {
     const x = (i - (SCHOOLS.length - 1) / 2) * SCHOOL_STEP
     const z = SCHOOL_Z
-    flats.push(flat(SCHOOL_STEP - 4, 28, PAVE, x, z, Y_PAVE))
-    flats.push(flat(4, 12, PAVE, x, z + 20, Y_PAVE)) // a path down to the north road
-    // the headline model in the middle, its ring in a horseshoe open to the plaza side (+z)
-    const hero = place(sc.hero, x, z - 1, { district: sc.palette, ry: 0, scale: 1.7 * 1.45, id: `school:${sc.id}`, tag: 'school', clearance: 1.0, seed: hashStr(sc.id) })
+    F(flat(SCHOOL_STEP - 4, 26, PAVE, x, z, Y_PAVE))
+    F(flat(4, 8, PAVE, x, z + 17, Y_PAVE))
+    const tagged = { district: sc.palette, id: `school:${sc.id}`, tag: 'school', solid: false }
+    const hero = place(sc.hero, x, z - 1, { ...tagged, scale: 1.7 * 1.45, clearance: 1.0, seed: hashStr(sc.id) })
     if (hero) pickables.push(hero.root)
     const n = sc.ring.length
     sc.ring.forEach((name, k) => {
-      const a = P * 0.1 + (k / Math.max(1, n - 1)) * P * 0.8 // 18deg .. 162deg, round the back and sides
-      const rx = x + Math.cos(a) * 11.5
-      const rz = z - 1 - Math.sin(a) * 9
-      const b = place(name, rx, rz, { district: sc.palette, ry: Math.atan2(x - rx, z - rz), scale: 1.7 * 1.05, id: `school:${sc.id}`, tag: 'school', clearance: 0.6, seed: hashStr(name) })
+      const a = P * 0.1 + (k / Math.max(1, n - 1)) * P * 0.8
+      const rx = x + Math.cos(a) * 11
+      const rz = z - 1 - Math.sin(a) * 8.5
+      const b = place(name, rx, rz, { ...tagged, ry: Math.atan2(x - rx, z - rz), scale: 1.7 * 1.05, clearance: 0.6, seed: hashStr(name) })
       if (b) pickables.push(b.root)
     })
-    place('flagpole', x - 9, z + 12, { district: sc.palette })
-    place('flagpole', x + 9, z + 12, { district: sc.palette })
-    stamp('lamppost', x - SCHOOL_STEP / 2 + 3, z + 11, P / 2)
-    stamp('lamppost', x + SCHOOL_STEP / 2 - 3, z + 11, -P / 2)
-    stamp('parkbench', x - 8, z + 12, P)
-    stamp('parkbench', x + 8, z + 12, P)
-    for (let k = 0; k < 4; k++) stamp('campustreetall', x - SCHOOL_STEP / 2 + 2, z - 10 + k * 6, k)
-    schoolMarks.push({ id: `school:${sc.id}`, name: `School of ${sc.name}`, x, y: 9, z: z - 2, kind: 'school', school: sc.id })
-    for (let k = 0; k < 5; k++) spots.grounds.push({ x: x - 10 + k * 5, z: z + 6 })
+    const arch = place('archgate', x, z + 12, { district: 'brain', solid: false, scale: 1.7 * 0.9, id: `school:${sc.id}`, tag: 'school' })
+    if (arch) pickables.push(arch.root)
+    stamp('lamppost', x - SCHOOL_STEP / 2 + 3, z + 10, P / 2)
+    stamp('lamppost', x + SCHOOL_STEP / 2 - 3, z + 10, -P / 2)
+    stamp('parkbench', x - 8, z + 11, P)
+    stamp('parkbench', x + 8, z + 11, P)
+    landmarks.push({ id: `school:${sc.id}`, name: `School of ${sc.name}`, x, y: 9, z: z - 2, kind: 'school', school: sc.id })
+    for (let k = 0; k < 8; k++) spots.grounds.push({ x: x - 12 + k * 3.5, z: z + 7 + (k % 2) * 2 })
   })
-  const schoolsRoad = flat(SCHOOLS.length * SCHOOL_STEP + 8, ROAD_W, ROAD, 0, SCHOOL_Z + 16, Y_ROAD)
-  flats.push(schoolsRoad)
 
-  // ── commit the flats and the instances ─────────────────────────────────────────────
-  mergeByColor(flats, flatMat, group)
-  const instanceMeshes = []
-  for (const [name, transforms] of instances) {
-    const built = build(name, { district: 'grounds', seed: hashStr(name), shadows })
-    if (!built) continue
-    instanceMeshes.push(...instanced(built, transforms, group, shadows))
-    // trees and posts block walking too; a soft radius so the crowd flows between them
-    const r = name.startsWith('campustree') ? 0.7 : name === 'hedgestraight' ? 0.5 : 0.35
-    for (const t of transforms) obstacles.push({ x: t.x, z: t.z, r })
-    built.dispose()
+  // ── the Point, beyond the river: lighthouse, wind turbines, a lookout ───────────────
+  {
+    let best = null
+    for (let t = -0.2; t < P / 2 + 0.2; t += 0.01) {
+      const p = rimPoint(t, 16)
+      const o = riverOffset(p.x, p.z)
+      if (!best || o > best.o) best = { t, o, ...p }
+    }
+    const tip = best
+    placeAny('lighthouse', [rimPoint(tip.t, 10), rimPoint(tip.t, 13), rimPoint(tip.t + 0.05, 12)].map((p) => ({ ...p, ry: Math.atan2(-p.x, -p.z) })), { district: 'grounds' })
+    landmarks.push({ id: 'point', name: 'The Point', x: tip.x, y: 16, z: tip.z, kind: 'place' })
+    const cands = []
+    for (let t = tip.t - 0.5; t <= tip.t + 0.5; t += 0.04) for (const inset of [22, 32, 42]) {
+      const p = rimPoint(t, inset)
+      if (riverOffset(p.x, p.z) > RIVER.shore + 8) cands.push(p)
+    }
+    const rnd = mulberry32(0x9017)
+    cands.sort(() => rnd() - 0.5)
+    let turbines = 0
+    for (const c of cands) {
+      if (turbines >= 3) break
+      if (place('windturbine', c.x, c.z, { district: 'grounds', ry: 0.7, pad: -4 })) turbines++
+    }
+    for (const c of cands) if (place('lookouttower', c.x, c.z, { district: 'brain', ry: 0.4 })) break
+    for (const c of cands.slice(0, 20)) spots.grounds.push({ x: c.x, z: c.z })
   }
 
-  const gate = { x: 0, z: 92 }
-  const landmarks = [
-    { id: 'greathall', name: 'The Great Hall', x: 0, y: 10, z: -31, kind: 'hall' },
-    { id: 'amphitheater', name: 'The Amphitheater', x: 0, y: 5, z: 27, kind: 'amphitheater' },
-    { id: 'mentorshall', name: 'Hall of Mentors', x: 0, y: 8, z: -78, kind: 'mentors' },
-    { id: 'library', name: 'The Library', x: -30, y: 8, z: -78, kind: 'library' },
-    { id: 'observatory', name: 'The Observatory', x: 30, y: 7, z: -78, kind: 'observatory' },
-    { id: 'gate', name: 'Welcome Gate', x: 0, y: 8, z: 96, kind: 'gate' },
-    { id: 'lake', name: 'The Lake', x: -150, y: 3, z: -62, kind: 'place' },
-    { id: 'harbour', name: 'The Harbour', x: 0, y: 3, z: 121, kind: 'place' },
-    { id: 'gardens', name: 'The Gardens', x: 0, y: 3, z: 84, kind: 'place' },
-    { id: 'market', name: 'The Market', x: 0, y: 5, z: 66, kind: 'place' },
-    { id: 'pitches', name: 'Playing Fields', x: 150, y: 3, z: 54, kind: 'place' },
-    { id: 'maze', name: 'The Maze', x: 108, y: 3, z: -64, kind: 'place' },
-  ]
-  for (const [id, c] of castles) landmarks.push({ id, name: `Castle of ${c.castle.short}`, x: c.x, y: 13, z: c.z, kind: 'castle', accent: c.castle.accent })
-  landmarks.push(...schoolMarks)
-  landmarks.push({ id: 'schools', name: 'The Schools', x: 0, y: 3, z: SCHOOL_Z + 18, kind: 'place' })
+  // ── the harbour on the south coast, ships at sea, canoes and footbridges on the river ───
+  {
+    placeAny('ferryterminal', [{ x: 0, z: rimS - 10 }, { x: 0, z: rimS - 13 }], { district: 'grounds' })
+    landmarks.push({ id: 'harbour', name: 'The Harbour', x: 0, y: 5, z: rimS - 10, kind: 'place' })
+    const atSea = { solid: false, obstacle: false, y: SEA_Y }
+    place('tallship', -28, rimS + 34, { ...atSea, district: 'brain', ry: 0.25, scale: 1.7 * 3.2 })
+    place('longship', 46, rimS + 52, { ...atSea, district: 'brain', ry: -0.5, scale: 1.7 * 1.8 })
+    place('fishingboat', 24, rimS + 22, { ...atSea, district: 'brain', ry: 1.2, scale: 1.7 * 1.8 })
+    place('sailboat', -60, rimS + 26, { ...atSea, ry: 2.4, scale: 1.7 * 2 })
+    for (let i = 0; i < 6; i++) place('buoy', -14 + i * 6, rimS + 12 + (i % 2) * 3, { ...atSea, district: 'brain' })
+    const along = Math.atan2(-RTZ, RTX)
+    for (const [f, off] of [[0.3, -2.5], [0.55, 2.5], [0.78, -1.5]]) {
+      const s = RIVER.sMin + (RIVER.sMax - RIVER.sMin) * f
+      const p = riverPoint(s, off)
+      place('canoe', p.x, p.z, { district: 'brain', ry: along, y: Y_WATER, solid: false, obstacle: false })
+    }
+    // footbridges well away from the road crossings: the two points on the river farthest from any
+    const crossS = roadGaps.map((g) => riverS(g.x, g.z))
+    const farthest = (lo, hi) => {
+      let best = lo
+      let bestD = -1
+      for (let s = lo; s <= hi; s += 2) {
+        const d = Math.min(...crossS.map((c) => Math.abs(c - s)))
+        if (d > bestD) {
+          bestD = d
+          best = s
+        }
+      }
+      return best
+    }
+    const mid = (RIVER.sMin + RIVER.sMax) / 2
+    const footS = [farthest(RIVER.sMin + 25, mid), farthest(mid, RIVER.sMax - 25)]
+    for (const [i, s] of footS.entries()) {
+      const f = i === 0 ? 0 : 1
+      const p = riverPoint(s)
+      bridge(f < 0.5 ? 'plankbridge' : 'ropebridge', p.x, p.z, Math.atan2(-RIVER.nz, RIVER.nx), RIVER.shore * 2 + 6)
+      for (const side of [-1, 1]) spots.grounds.push(riverPoint(s, side * (RIVER.shore + 5)))
+    }
+    landmarks.push({ id: 'river', name: 'The River', ...riverPoint(RIVER.sMin + (RIVER.sMax - RIVER.sMin) * 0.4), y: 3, kind: 'place' })
+  }
+
+  // ── planting, last: every tree and bush is checked against everything above ─────────
+  const inPlaced = (x, z, pad) => {
+    for (const p of placed) {
+      const b = p.box
+      if (x > b.min.x - pad && x < b.max.x + pad && z > b.min.z - pad && z < b.max.z + pad) return true
+    }
+    return false
+  }
+  const onRect = (x, z, pad) => {
+    for (const r of rects) if (Math.abs(x - r.x) < r.hw + pad && Math.abs(z - r.z) < r.hd + pad) return true
+    return false
+  }
+  const inReserved = (x, z, pad) => reserved.some((r) => Math.hypot(x - r.x, z - r.z) < r.r + pad)
+  const clear = (x, z, pad = 1) => inIsland(x, z, 3) && !inWater(x, z, pad) && !onRect(x, z, pad) && !onPlazaPath(x, z, pad) && !inPlaced(x, z, pad * 0.6) && !inReserved(x, z, pad)
+  {
+    const rand = mulberry32(0x9e1d)
+    const pick = (list) => list[Math.floor(rand() * list.length)]
+    const LAWN_TREES = ['oaktree', 'oaktree', 'oaktree', 'oaktree', 'birchtree', 'birchtree', 'cherrytree', 'autumntree', 'campustree', 'pinetree']
+    const BELT_TREES = ['pinetree', 'pinetree', 'pinetree', 'oaktree', 'oaktree', 'birchtree', 'autumntree']
+    const BUSHES = ['bushround', 'bushwide', 'bushflower', 'bushround']
+    let planted = 0
+    const cellSize = 3
+    const grid = new Map()
+    const near = (x, z, r) => {
+      const gx = Math.floor(x / cellSize)
+      const gz = Math.floor(z / cellSize)
+      for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const q of grid.get(`${gx + i},${gz + j}`) || []) if ((q.x - x) ** 2 + (q.z - z) ** 2 < r * r) return true
+      return false
+    }
+    const tree = (x, z, kind, sMin = 0.8, sMax = 1.3, spacing = 2.6, pad = 1.1) => {
+      if (near(x, z, spacing) || !clear(x, z, pad)) return false
+      stamp(kind, x, z, rand() * P * 2, sMin + rand() * (sMax - sMin))
+      const key = `${Math.floor(x / cellSize)},${Math.floor(z / cellSize)}`
+      if (!grid.has(key)) grid.set(key, [])
+      grid.get(key).push({ x, z })
+      planted++
+      return true
+    }
+    for (let i = 0; i < 16000; i++) {
+      const t = rand() * P * 2
+      const p = rimPoint(t, 5 + Math.pow(rand(), 1.3) * 44)
+      if (Math.abs(p.x) < RX + 4 && Math.abs(p.z) < RZ + 4) continue
+      tree(p.x, p.z, pick(BELT_TREES), 0.8, 1.35, 2.4, 1.2)
+    }
+    for (let i = 0; i < 40; i++) {
+      const p = rimPoint(rand() * P * 2, 12 + rand() * 25)
+      if (clear(p.x, p.z, 1.5)) stamp(rand() < 0.5 ? 'logpile' : 'treestump', p.x, p.z, rand() * P * 2, 1)
+    }
+    for (let g = 0; g < 700; g++) {
+      const gx = (rand() - 0.5) * 2 * RX
+      const gz = (rand() - 0.5) * 2 * RZ
+      if (!clear(gx, gz, 3)) continue
+      const main = pick(LAWN_TREES)
+      const n = 8 + Math.floor(rand() * 20)
+      const radius = 5 + rand() * 10
+      for (let i = 0; i < n; i++) {
+        const a = rand() * P * 2
+        const r = Math.sqrt(rand()) * radius
+        tree(gx + Math.cos(a) * r, gz + Math.sin(a) * r, rand() < 0.8 ? main : pick(LAWN_TREES))
+      }
+      if (rand() < 0.5) {
+        for (let i = 0; i < 4; i++) {
+          const a = rand() * P * 2
+          const x = gx + Math.cos(a) * (radius + 2)
+          const z = gz + Math.sin(a) * (radius + 2)
+          if (clear(x, z, 0.6)) stamp(pick(BUSHES), x, z, rand() * P * 2, 0.9 + rand() * 0.4)
+        }
+      }
+    }
+    for (let i = 0; i < 7000; i++) {
+      const x = (rand() - 0.5) * 2 * (RX + 20)
+      const z = (rand() - 0.5) * 2 * (RZ + 20)
+      if (tree(x, z, pick(LAWN_TREES)) && rand() < 0.3) tree(x + 2.5 + rand() * 2, z + (rand() - 0.5) * 3, pick(LAWN_TREES))
+    }
+    for (const z of ROADS_HZ) for (let x = -RX; x <= RX; x += 8) for (const s of [-1, 1]) tree(x + s * 2, z + s * 6.2, 'oaktree', 0.75, 0.95, 3, 0.8)
+    for (const x of ROADS_VX) for (let z = -RZ; z <= RZ; z += 8) for (const s of [-1, 1]) tree(x + s * 6.2, z + s * 2, Math.abs(x) === 60 ? 'cypresstree' : 'birchtree', 0.8, 1.0, 3, 0.8)
+    for (const w of waters) {
+      if (w.name === 'river') {
+        for (let s = RIVER.sMin; s <= RIVER.sMax; s += 5) {
+          for (const side of [-1, 1]) {
+            const p = riverPoint(s, side * (RIVER.shore + 3 + rand() * 4))
+            if (rand() < 0.6) tree(p.x, p.z, rand() < 0.7 ? 'willowtree' : 'birchtree', 0.8, 1.2, 3, 0.4)
+            else if (clear(p.x, p.z, 0.3)) stamp(rand() < 0.5 ? 'reedclump' : 'rock', p.x, p.z, rand() * P * 2, 1)
+          }
+        }
+        continue
+      }
+      for (let i = 0; i < 26; i++) {
+        const a = (i / 26) * P * 2
+        const rr = w.r * 1.3 + 4 + rand() * 4
+        const x = w.x + Math.cos(a) * rr
+        const z = w.z + Math.sin(a) * rr
+        if (i % 3 === 0) {
+          if (clear(x, z, 0.4)) stamp(rand() < 0.5 ? 'rockcluster' : 'rock', x, z, rand() * P * 2, 1)
+        } else tree(x, z, 'willowtree', 0.8, 1.2, 3.5, 0.4)
+      }
+    }
+    for (const pl of placed) {
+      if (/^(castle|badge|flag|buoy|canoe|rowboat|sailboat|tallship|longship|fishing|lamp|park|notice|phone|bike|topiary|markettent|hedgering|suspension|stonearch|truss|plank|rope|arch)/.test(pl.name)) continue
+      const b = pl.box
+      const n = 4 + Math.floor(rand() * 5)
+      for (let i = 0; i < n; i++) {
+        const side = Math.floor(rand() * 4)
+        const t = rand()
+        const x = side === 0 ? b.min.x - 1.2 : side === 1 ? b.max.x + 1.2 : b.min.x + t * (b.max.x - b.min.x)
+        const z = side === 2 ? b.min.z - 1.2 : side === 3 ? b.max.z + 1.2 : b.min.z + t * (b.max.z - b.min.z)
+        if (inWater(x, z, 0.5) || onRect(x, z, 0.6) || onPlazaPath(x, z, 0.6)) continue
+        stamp(rand() < 0.2 ? 'flowerbed' : pick(BUSHES), x, z, rand() * P * 2, 0.7 + rand() * 0.4)
+      }
+    }
+    {
+      const c = CELLS.environmental
+      for (let x = c.x0 + 4; x < c.x1 - 4; x += 3.5) for (const z of [c.z1 - 4, c.z1 - 8]) if (clear(x, z, 0.8)) stamp('saplingtree', x, z, 0, 1)
+    }
+    for (const rz of [-100, 100]) {
+      for (let x = -RX; x <= RX; x += 1.02) {
+        if (Math.floor((x + 400) / 26) % 3 === 0) continue
+        const z = rz + (rz > 0 ? 1 : -1) * (ROAD_W / 2 + 1.5)
+        if (clear(x, z, 0.2)) stamp('hedgestraight', x, z, 0, 0.6)
+      }
+    }
+    console.log('[campus] trees planted', planted)
+  }
+
+  // ── commit: drop any stamp that ended up in water or a building, then instance ─────────
+  const NATURE = /tree|bush|flower|hedge|topiary|rock|reed|stump|logpile|planter/
+  let dropped = 0
+  for (const [name, list] of instances) {
+    const keep = list.filter((t) => {
+      if (name === 'lilypads' || name === 'reedclump') return inIsland(t.x, t.z, 2)
+      if (!inIsland(t.x, t.z, 2) || inWater(t.x, t.z, NATURE.test(name) ? 0.8 : 0)) return false
+      if (NATURE.test(name) && name !== 'hedgestraight' && (onRect(t.x, t.z, 0.6) || onPlazaPath(t.x, t.z, 0.6))) return false
+      if (name !== 'hedgestraight' && inPlaced(t.x, t.z, NATURE.test(name) ? 0.2 : -0.3)) return false
+      return true
+    })
+    dropped += list.length - keep.length
+    instances.set(name, keep)
+  }
+  mergeByColor(flats, flatMat, group)
+  for (const [name, transforms] of instances) {
+    if (!transforms.length) continue
+    const TREE_PALETTE = { autumntree: { ROOF: '#d2733a' }, cherrytree: { LIGHT: '#f2b8d0' }, oaktree: { LEAF: '#4f9a3f' }, pinetree: { LEAF: '#3f7d45' }, birchtree: { LEAF: '#7fb24a' }, willowtree: { LEAF: '#6fa84a' } }
+    const built = build(name, { district: 'grounds', seed: hashStr(name), shadows, palette: TREE_PALETTE[name] })
+    if (!built) continue
+    instanced(built, transforms, group, shadows)
+    const r = /tree/.test(name) ? 0.7 : /hedge/.test(name) ? 0.5 : /lilypads|reed/.test(name) ? 0 : 0.35
+    if (r) for (const t of transforms) obstacles.push({ x: t.x, z: t.z, r })
+    built.dispose()
+  }
+  const standable = (p) => inIsland(p.x, p.z, 3) && !inWater(p.x, p.z, 1) && !inPlaced(p.x, p.z, 0.6)
+  for (const k of Object.keys(spots)) spots[k] = spots[k].filter(standable)
+  console.log('[campus] unplaced', [...new Set(rejected)].join(','), '| stamps dropped', dropped)
+
+  const gate = { x: 0, z: 104 }
   return {
     landmarks,
     group,
@@ -889,7 +1062,7 @@ export function buildCampus(scene, { shadows = true, detail = 'medium' } = {}) {
     spots,
     gate,
     placed,
-    stats: { placed: placedCount, instanced: [...instances.values()].reduce((n, t) => n + t.length, 0), animated: animated.length, flats: flats.length },
+    stats: { placed: placedCount, instanced: [...instances.values()].reduce((n, t) => n + t.length, 0), animated: animated.length, flats: flats.length, rejected: rejected.length },
     tick(dt) {
       for (const b of animated) b.tick(dt)
     },

@@ -402,10 +402,13 @@ export class Engine {
     if (this._slow >= 3) {
       next = Math.max(floor, current - 0.15 * dpr)
       this._slow = 0
+      // One way only on the campus: a heavy scene sits right on the boundary, and climbing
+      // back is what made it resize every few seconds, which read as the screen flickering.
+      this._dropped = true
       // Having just proved this machine cannot hold the higher scale, do not go back and
       // ask it again ten seconds later — that is the oscillation.
       this._climbAt = now + 8000
-    } else if (this._fast >= 8 && current < ceiling && now >= (this._climbAt || 0)) {
+    } else if (this._fast >= 8 && current < ceiling && now >= (this._climbAt || 0) && !this._dropped) {
       next = Math.min(ceiling, current + 0.2 * dpr)
       this._fast = 0
     }
@@ -421,6 +424,9 @@ export class Engine {
     this.tiltShift?.setCamera(this.camera)
       this.viewport = { ...this.viewport, bw, bh, scale: next }
       this.autoScaled = next < ceiling - 0.01
+      // setSize clears the buffer after this frame was drawn; draw again now so the compositor
+      // never presents the cleared canvas
+      this.renderFrame()
     }
   }
 

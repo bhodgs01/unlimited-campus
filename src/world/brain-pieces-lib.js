@@ -710,6 +710,457 @@ export default function BRAIN_PIECES(THREE, CELL) {
     G('sat',0,1.3);B(.65,.8,.6,'METAL');for(const s of [-1,1]){B(.85,.06,1.1,'ACCENT2',s*.95);L([s*.3,0,0],[s*.6,0,0],.04,'METAL');for(let i=0;i<3;i++)B(.02,.02,1.1,'METAL',s*.95-.25+i*.25,.04);}S(.4,.14,.4,'LIGHT',0,.6);L([0,.55,0],[0,.9,0],.025,'METAL');E();
     return {label:"Satellite",kind:"landmark",pose(t,parts){parts.sat.rotation.y=t*Math.PI*2},loop:16};
   },
+  stonearchbridge(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const P=(pts,d,k,o={})=>{const s=new THREE.Shape();pts.forEach(([x,y],i)=>i?s.lineTo(x,y):s.moveTo(x,y));s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:false,curveSegments:12});g.translate(0,0,-d/2);c.geom(g,k,o);};
+    const outline=[[-2.82,0],[-2.82,1.65],[-1.5,2.12],[0,2.27],[1.5,2.12],[2.82,1.65],[2.82,0],[1.63,0],[1.63,.30]];
+    for(let i=0;i<=24;i++){const a=i*Math.PI/24;outline.push([1.63*Math.cos(a),.30+1.63*Math.sin(a)]);}outline.push([-1.63,0]);
+    P(outline,1.92,CELL.STONE_DARK,{label:'Masonry spandrel'});
+    for(const z of [-1.025,1.025]){
+      for(let i=0;i<15;i++){const a=i*Math.PI/15+.015,b=(i+1)*Math.PI/15-.015;P([[1.63*Math.cos(a),.3+1.63*Math.sin(a)],[1.96*Math.cos(a),.3+1.96*Math.sin(a)],[1.96*Math.cos(b),.3+1.96*Math.sin(b)],[1.63*Math.cos(b),.3+1.63*Math.sin(b)]],.18,i===7?CELL.LIGHT:CELL.STONE,{z,label:i===7?'Keystone':i===2?'Voussoirs':undefined});}
+      for(const x of [-2.23,2.23])for(let j=0;j<4;j++)B(1.13,.30,.18,CELL.STONE,{x,y:.16+j*.33,z});
+    }
+    for(let i=0;i<14;i++){const x=-2.6+i*.4,road=2.31-.082*x*x;
+      B(.397,.10,1.97,CELL.STONE,{x,y:road,rz:-.164*x,label:i===6?'Cambered roadway':undefined});
+      for(const z of [-1.05,1.05]){B(.389,.42,.23,CELL.STONE,{x,y:road+.24,z,rz:-.164*x});B(.402,.10,.31,CELL.LIGHT,{x,y:road+.48,z,rz:-.164*x,label:i===4&&z>0?'Parapet coping':undefined});}
+    }
+    // Static terrain architecture: the pose contract intentionally leaves masonry fixed.
+    return {label:'Single-arch stone bridge',kind:'hero',pose(t,p){}};
+  },
+  plankbridge(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const T=(pts,r,k,o={})=>c.geom(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(p=>new THREE.Vector3(...p))),24,r,6,false),k,o);
+    const P=(pts,d,k,o={})=>{const s=new THREE.Shape();pts.forEach(([x,y],i)=>i?s.lineTo(x,y):s.moveTo(x,y));s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:false,curveSegments:12});g.translate(0,0,-d/2);c.geom(g,k,o);};
+    // World span: 8-unit clear gap; abutments flare outside the gap to meet turf.
+    B(.48,.35,2.2,CELL.STONE,{x:-4.05,y:.105,label:'West abutment'});
+    B(.48,.35,2.2,CELL.STONE,{x:4.05,y:.105,label:'East abutment'});
+    for(const side of [-1,1]){
+      P([[0,0],[.65,0],[.65,.43],[0,.015]],2.32,CELL.WOOD,{x:side===1?4.65:-4.65,ry:side===1?Math.PI:0,label:'Flared landing'});
+      c.group(side===-1?'leftSpan':'rightSpan',{x:side*4,y:.38});
+      const dir=-side;
+      for(const z of [-.71,.71])B(4,.14,.16,CELL.WOOD,{x:dir*2,y:-.12,z,label:z<0?'Stringer':undefined});
+      for(let i=0;i<12;i++)B(.303,.10,1.88,CELL.WOOD,{x:dir*(i+.5)/3,y:0,ry:(rand()-.5)*.012});
+      for(const z of [-.98,.98]){
+        for(let i=0;i<=4;i++){const x=dir*(.06+i*.96);B(.105,.79,.105,CELL.WOOD,{x,y:.38,z});C(.085,.055,CELL.METAL_DARK,{x,y:.74,z});}
+        T([[dir*.06,.72,z],[dir*1,.66,z],[dir*2,.64,z],[dir*3,.66,z],[dir*4,.72,z]],.033,CELL.CLOTH,{label:z>0?'Rope handrail':undefined});
+      }
+      c.end();
+    }
+    return {label:'Timber crossing',kind:'hero',loop:4,pose(t,p){const a=Math.asin(.15/4)*Math.sin(Math.PI*t)**2;p.leftSpan.rotation.z=-a;p.rightSpan.rotation.z=a;}};
+  },
+  ropebridge(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const rod=(a,b,r,k,o={})=>{const u=new THREE.Vector3(...a),v=new THREE.Vector3(...b),d=v.clone().sub(u);const q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.clone().normalize());const g=new THREE.CylinderGeometry(r,r,d.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(q));const p=u.add(v).multiplyScalar(.5);c.geom(g,k,{x:p.x,y:p.y,z:p.z,...o});};
+    const T=(pts,r,k,o={})=>c.geom(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(p=>new THREE.Vector3(...p))),24,r,6,false),k,o);
+    const R=(r,t,k,o={})=>c.geom(new THREE.TorusGeometry(r,t,6,24),k,o);
+    // The suspended deck is lowest at the centre; only the span rolls about its length.
+    const deck=x=>.30+.58*(Math.cosh(x/2.5)-1)/(Math.cosh(2.55/2.5)-1);
+    for(const x of [-2.66,2.66])for(const z of [-.99,.99]){
+      C(.22,.18,CELL.STONE,{x,y:.04,z,label:z<0?'Anchor footing':undefined});
+      C(.115,2.10,CELL.WOOD,{x,y:1.05,z,label:z>0?'Anchor post':undefined});
+      R(.12,.035,CELL.METAL_DARK,{x,y:1.88,z,rx:Math.PI/2});
+      rod([x,.22,z],[x-Math.sign(x)*.36,1.22,z],.055,CELL.WOOD);
+    }
+    c.group('span',{y:.85});
+    for(let i=0;i<18;i++){const x=-2.49+i*.293;B(.26,.09,1.66,CELL.WOOD,{x,y:deck(x)-.85,rz:Math.atan(.58*Math.sinh(x/2.5)/(2.5*(Math.cosh(2.55/2.5)-1)))*.6,label:i===8?'Slung planks':undefined});}
+    for(const z of [-.9,.9]){
+      const top=[],bottom=[];
+      for(let i=0;i<=16;i++){const x=-2.55+i*5.1/16;top.push([x,deck(x)+.95-.85,z]);bottom.push([x,deck(x)-.91,z]);}
+      T(top,.045,CELL.CLOTH,{label:z>0?'Hanging handrope':'Suspension rope'});T(bottom,.045,CELL.CLOTH);
+      for(let i=0;i<=10;i++){const x=-2.5+i*.5;rod([x,deck(x)-.86,z],[x,deck(x)+.10,z],.025,CELL.CLOTH);}
+    }
+    c.end();
+    for(const x of [-2.64,2.64]){B(.48,.16,1.84,CELL.WOOD,{x,y:.78,label:x>0?'Landing tread':undefined});B(.5,.63,1.68,CELL.STONE,{x,y:.315});}
+    return {label:'Suspension footbridge',kind:'hero',loop:6,pose(t,p){p.span.rotation.x=Math.PI/60*Math.sin(2*Math.PI*t);}};
+  },
+  suspensionbridge(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const rod=(a,b,r,k,o={})=>{const u=new THREE.Vector3(...a),v=new THREE.Vector3(...b),d=v.clone().sub(u);const q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.clone().normalize());const g=new THREE.CylinderGeometry(r,r,d.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(q));const p=u.add(v).multiplyScalar(.5);c.geom(g,k,{x:p.x,y:p.y,z:p.z,...o});};
+    const T=(pts,r,k,o={})=>c.geom(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(p=>new THREE.Vector3(...p))),Math.min(192,Math.max(24,pts.length*2)),r,6,false),k,o);
+    B(5.75,.06,2.14,CELL.GLASS,{y:-.025,label:'River'});
+    for(const x of [-1.50,1.50]){
+      for(const z of [-.68,.68]){B(.31,2.73,.30,CELL.STONE,{x,y:1.365,z,label:z>0?'Tower leg':undefined});B(.46,.17,.45,CELL.STONE_DARK,{x,y:.08,z});}
+      B(.34,.19,1.64,CELL.STONE,{x,y:2.56,label:x<0?'Tower crossbeam':undefined});
+    }
+    for(const z of [-.69,.69]){
+      const pts=[[-2.65,.47,z],[-1.50,2.71,z],[-.75,2.12,z],[0,1.95,z],[.75,2.12,z],[1.5,2.71,z],[2.65,.47,z]];T(pts,.045,CELL.METAL,{label:z>0?'Main cable':undefined});
+      for(let i=0;i<7;i++){const x=-1.5+i*.5,h=1.95+.76*(Math.cosh(x/1.5)-1)/(Math.cosh(1)-1);rod([x,.81,z],[x,h,z],.022,CELL.METAL);}
+    }
+    for(const x of [-2.65,2.65])B(.42,.40,1.67,CELL.STONE,{x,y:.20,label:x<0?'Cable anchorage':undefined});
+    c.group('deck',{y:.77});B(5.58,.14,1.32,CELL.STONE,{label:'Suspended roadway'});
+    for(const z of [-.62,.62]){B(5.55,.045,.045,CELL.METAL,{y:.35,z});for(let i=0;i<15;i++)B(.028,.35,.028,CELL.METAL,{x:-2.65+i*.378,y:.18,z});}c.end();
+    return {label:'Suspension bridge',kind:'hero',loop:6,pose(t,p){p.deck.position.z=.10*Math.sin(2*Math.PI*t);}};
+  },
+  trussbridge(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const rod=(a,b,r,k,o={})=>{const u=new THREE.Vector3(...a),v=new THREE.Vector3(...b),d=v.clone().sub(u);const q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.clone().normalize());const g=new THREE.CylinderGeometry(r,r,d.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(q));const p=u.add(v).multiplyScalar(.5);c.geom(g,k,{x:p.x,y:p.y,z:p.z,...o});};
+    for(const x of [-1.24,1.24])B(.37,.50,1.26,CELL.STONE,{x,y:.25});B(2.85,.12,1.15,CELL.WOOD,{y:.56});
+    for(const z of [-.60,.60]){
+      rod([-1.40,.66,z],[1.40,.66,z],.043,CELL.METAL);rod([-1.40,1.42,z],[1.40,1.42,z],.043,CELL.METAL);
+      for(let i=0;i<7;i++)rod([-1.4+i*.4,.66+(i%2)*.76,z],[-1.4+(i+1)*.4,.66+((i+1)%2)*.76,z],.042,CELL.METAL);
+      for(const x of [-1.4,1.4])rod([x,.66,z],[x,1.42,z],.043,CELL.METAL);
+    }
+    return {label:'Warren truss bridge',kind:'landmark'};
+  },
+  goldengate(c, rand) {
+    const box=(w,h,d,cell,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),cell,o)
+    const beam=(a,b,w,cell,label)=>{
+      const dx=b[0]-a[0],dy=b[1]-a[1],dz=b[2]-a[2]
+      box(w,Math.hypot(dx,dy,dz),w,cell,{x:(a[0]+b[0])/2,y:(a[1]+b[1])/2,z:(a[2]+b[2])/2,rx:Math.atan2(dz,dy),rz:-Math.atan2(dx,Math.hypot(dy,dz)),label})
+    }
+    const tube=(pts,r,cell,o={})=>c.geom(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(p=>new THREE.Vector3(...p))),Math.max(16,pts.length*3),r,6,false),cell,o)
+
+  box(3.08,.10,.53,CELL.METAL,{y:.61})
+    for(const x of [-.87,.87]){
+      for(const z of [-.24,.24])box(.095,1.78,.10,CELL.ACCENT,{x,y:.89,z})
+      for(const y of [.94,1.33,1.71])box(.11,.075,.58,CELL.ACCENT,{x,y})
+    }
+    for(const z of [-.27,.27]){
+      // Parabolic span sampled identically for cable and hanger endpoints.
+      const points=[[-1.50,.69,z],[-.87,1.77,z]]
+      for(let i=1;i<=16;i++){const x=-.87+i*1.74/16;points.push([x,.93+.84*(x/.87)**2,z])}
+      points.push([1.50,.69,z]);tube(points,.027,CELL.ACCENT)
+      for(const x of [-.65,-.43,-.21,0,.21,.43,.65])beam([x,.66,z],[x,.93+.84*(x/.87)**2,z],.022,CELL.ACCENT)
+    }
+    box(.91,.085,.69,CELL.LIGHT,{x:-1.02,y:.53,z:.06})
+    box(1.01,.07,.68,CELL.LIGHT,{x:.89,y:.54,z:-.03})
+    return {label:'Golden Gate Bridge',kind:'landmark'}
+  },
+  tallship(c, rand) {
+    const box=(w,h,d,cell,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),cell,o)
+    const cyl=(r,h,cell,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),cell,o)
+    const beam=(a,b,w,cell,label)=>{
+      const dx=b[0]-a[0],dy=b[1]-a[1],dz=b[2]-a[2]
+      box(w,Math.hypot(dx,dy,dz),w,cell,{x:(a[0]+b[0])/2,y:(a[1]+b[1])/2,z:(a[2]+b[2])/2,rx:Math.atan2(dz,dy),rz:-Math.atan2(dx,Math.hypot(dy,dz)),label})
+    }
+    const plate=(pts,d,cell,o={})=>{
+      const s=new THREE.Shape();pts.forEach(([x,y],i)=>i?s.lineTo(x,y):s.moveTo(x,y));s.closePath()
+      c.geom(new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:false}),cell,o)
+    }
+    const hull=(l,w,h,cell,o={})=>plate([[-l/2,-w*.35],[-l*.35,-w/2],[l*.30,-w/2],[l/2,0],[l*.30,w/2],[-l*.35,w/2],[-l/2,w*.35]],h,cell,{...o,rx:-Math.PI/2})
+
+  hull(2.76,.77,.24,CELL.WOOD,{y:.05})
+    hull(2.80,.81,.065,CELL.ACCENT,{y:.29})
+    hull(2.74,.75,.11,CELL.WOOD,{y:.355})
+    for(const [x,h]of [[-.86,1.72],[0,2.17],[.83,1.85]]){
+      cyl(.044,h,CELL.WOOD,{x,y:.46+h/2})
+      for(const [y,w]of [[.98,.72],[1.55,.59]]){
+        box(.036,.45,w,CELL.CLOTH,{x,y,z:0,ry:1.10})
+        box(.055,.055,w+.13,CELL.WOOD,{x,y:y+.26,ry:1.10})
+      }
+    }
+    beam([1.00,.43,0],[1.55,.79,0],.055,CELL.WOOD)
+    box(.52,.21,.59,CELL.WOOD,{x:-.98,y:.56})
+    return {label:'Three-masted tall ship',kind:'landmark'}
+  },
+  fishingboat(c, rand) {
+    const B=(w,h,d,k,x=0,y=0,z=0,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),CELL[k],{x,y,z,...o});
+    const S=(a,b,d,k,x=0,y=0,z=0,o={})=>{const g=new THREE.SphereGeometry(1,12,8);g.scale(a,b,d);return c.geom(g,CELL[k],{x,y,z,...o});};
+    const L=(a,b,r,k,o={})=>{const u=new THREE.Vector3(...a),v=new THREE.Vector3(...b),d=v.clone().sub(u);const g=new THREE.CylinderGeometry(r,r,d.length(),8);g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize()));const m=u.add(v).multiplyScalar(.5);return c.geom(g,CELL[k],{x:m.x,y:m.y,z:m.z,...o});};
+    const P=(pts,r,k,o={})=>{const curve=new THREE.CatmullRomCurve3(pts.map(p=>new THREE.Vector3(...p)));c.geom(new THREE.TubeGeometry(curve,48,r,6,false),CELL[k],o);return curve;};
+    S(1.4,.35,.65,'WOOD',0,.4);S(1.1,.08,.44,'STONE_DARK',0,.66);B(.3,.6,.4,'METAL_DARK',-1.15,.7);B(.45,.25,.4,'ACCENT',.3,.8);P([[.6,.65,0],[.9,1.7,0],[1.3,2.1,0],[1.4,1.9,0]],.03,'METAL');L([1.4,1.9,0],[1.4,.2,0],.009,'LIGHT');
+    return {label:"Fishing boat",kind:"landmark"};
+  },
+  canoe(c, rand) {
+    const B=(w,h,d,k,x=0,y=0,z=0,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),CELL[k],{x,y,z,...o});
+    const S=(a,b,d,k,x=0,y=0,z=0,o={})=>{const g=new THREE.SphereGeometry(1,12,8);g.scale(a,b,d);return c.geom(g,CELL[k],{x,y,z,...o});};
+    const L=(a,b,r,k,o={})=>{const u=new THREE.Vector3(...a),v=new THREE.Vector3(...b),d=v.clone().sub(u);const g=new THREE.CylinderGeometry(r,r,d.length(),8);g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize()));const m=u.add(v).multiplyScalar(.5);return c.geom(g,CELL[k],{x:m.x,y:m.y,z:m.z,...o});};
+    S(1.45,.35,.55,'WOOD',0,.38);S(1.2,.04,.36,'STONE_DARK',0,.69);for(const x of [-.5,.5])B(.14,.08,.8,'WOOD',x,.7);for(const s of [-1,1]){L([s*.2,.8,-.9],[s*.7,.8,1],.03,'WOOD');S(.13,.035,.32,'LIGHT',s*.65,.8,.85);}
+    return {label:"Canoe",kind:"landmark"};
+  },
+  buoy(c, rand) {
+    const C=(r,h,k,x=0,y=0,z=0,o={},r2=r)=>{const g=new THREE.CylinderGeometry(r,r2,h,12);if(o.spin){g.applyQuaternion(new THREE.Quaternion().setFromEuler(new THREE.Euler(o.rx||0,o.ry||0,o.rz||0)));return c.geom(g,CELL[k],{x,y,z,...o,rx:0,ry:0,rz:0});}return c.geom(g,CELL[k],{x,y,z,...o});};
+    const G=(n,x=0,y=0,z=0,o={})=>c.group(n,{x,y,z,...o}), E=()=>c.end();
+    G('bob',0,.5);C(.45,.3,'ACCENT');C(.15,.9,'METAL',0,.55);C(.23,.2,'GLOW',0,1.05,0,{emissive:.8});c.geom(new THREE.ConeGeometry(.2,.3,8),CELL.ACCENT,{y:1.3});E();
+    return {label:"Buoy",kind:"landmark",pose(t,parts){parts.bob.position.y=.5+.12*Math.sin(t*Math.PI*2)},loop:3};
+  },
+  dockjetty(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const rod=(a,b,r,k,o={})=>{const u=new THREE.Vector3(...a),v=new THREE.Vector3(...b),d=v.clone().sub(u);const q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.clone().normalize());const g=new THREE.CylinderGeometry(r,r,d.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(q));const p=u.add(v).multiplyScalar(.5);c.geom(g,k,{x:p.x,y:p.y,z:p.z,...o});};
+    const T=(pts,r,k,o={})=>c.geom(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(p=>new THREE.Vector3(...p))),24,r,6,false),k,o);
+    const P=(pts,d,k,o={})=>{const s=new THREE.Shape();pts.forEach(([x,y],i)=>i?s.lineTo(x,y):s.moveTo(x,y));s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:false,curveSegments:12});g.translate(0,0,-d/2);c.geom(g,k,o);};
+    const R=(r,t,k,o={})=>c.geom(new THREE.TorusGeometry(r,t,6,24),k,o);
+    for(const x of [-.73,.73])for(const z of [-2.13,-.65,.94]){C(.12,.81,CELL.WOOD,{x:x-.65,y:.285,z,label:z===.94?'Pier pile':undefined});C(.135,.055,CELL.METAL_DARK,{x:x-.65,y:.64,z});}
+    for(const x of [-1.38,.08])B(.14,.22,3.74,CELL.WOOD,{x,y:.54,z:-.53,label:x<0?'Longitudinal bearer':undefined});
+    for(let i=0;i<16;i++)B(1.84,.10,.211,CELL.WOOD,{x:-.65,y:.69,z:-2.23+i*.23,ry:(rand()-.5)*.01,label:i===8?'Jetty decking':undefined});
+    C(.14,.57,CELL.WOOD,{x:.12,y:1.0,z:1.11,label:'Mooring bollard'});R(.15,.035,CELL.CLOTH,{x:.12,y:1.12,z:1.11,rx:Math.PI/2});
+    P([[0,0],[1.08,0],[1.08,.74],[0,.025]],1.84,CELL.WOOD,{x:-.65,z:2.41,ry:Math.PI/2,label:'Shore ramp'});
+    c.group('boat',{x:1.33,y:.27,z:.24});
+    const plan=[[-.46,-.98],[-.57,-.35],[-.48,.72],[0,1.10],[.48,.72],[.57,-.35],[.46,-.98]];
+    const s=new THREE.Shape();plan.forEach(([x,z],i)=>i?s.lineTo(x,-z):s.moveTo(x,-z));s.closePath();const floor=new THREE.ExtrudeGeometry(s,{depth:.095,bevelEnabled:false});floor.rotateX(-Math.PI/2);c.geom(floor,CELL.WOOD,{label:'Rowboat hull'});
+    const rim=plan.map(([x,z])=>[x,.29,z]);rim.push(rim[0]);T(rim,.085,CELL.WOOD,{label:'Gunwale'});
+    for(let i=0;i<plan.length;i++){const a=plan[i],b=plan[(i+1)%plan.length];const d=Math.hypot(b[0]-a[0],b[1]-a[1]);B(d,.26,.075,CELL.WOOD,{x:(a[0]+b[0])/2,y:.16,z:(a[1]+b[1])/2,ry:-Math.atan2(b[1]-a[1],b[0]-a[0])});}
+    for(const z of [-.52,.24])B(.96,.07,.20,CELL.WOOD,{y:.29,z,label:z<0?'Thwart':undefined});
+    rod([-.36,.39,-.7],[.3,.39,.67],.03,CELL.WOOD,{label:'Oar'});B(.14,.055,.35,CELL.WOOD,{x:.32,y:.39,z:.73,ry:.44});c.end();
+    T([[.12,1.12,1.11],[.46,.73,1.36],[.86,.43,1.31],[1.33,.52,1.3]],.024,CELL.CLOTH,{label:'Painter line'});
+    return {label:'Jetty and rowing boat',kind:'hero',loop:5,pose(t,p){p.boat.rotation.z=.065*Math.sin(2*Math.PI*t);p.boat.position.y=.27+.022*Math.sin(2*Math.PI*t);}};
+  },
+  longship(c, rand) {
+    const box = (w, h, d, cell, o = {}) => c.geom(new THREE.BoxGeometry(w, h, d), cell, o)
+    const cyl = (r, h, cell, o = {}, n = 12) => c.geom(new THREE.CylinderGeometry(r, r, h, n), cell, o)
+    const beam = (a, b, w, cell, label) => {
+      const dx = b[0]-a[0], dy = b[1]-a[1], dz = b[2]-a[2]
+      box(w, Math.hypot(dx, dy, dz), w, cell, { x:(a[0]+b[0])/2, y:(a[1]+b[1])/2, z:(a[2]+b[2])/2,
+        rx:Math.atan2(dz, dy), rz:-Math.atan2(dx, Math.hypot(dy, dz)), label })
+    }
+    const tube = (points, radius, cell, o = {}) => c.geom(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(...p))), Math.max(16, points.length*3), radius, 6, false), cell, o)
+    const plate = (points, depth, cell, o = {}) => {
+      const s = new THREE.Shape()
+      points.forEach(([x,y],i) => i ? s.lineTo(x,y) : s.moveTo(x,y)); s.closePath()
+      c.geom(new THREE.ExtrudeGeometry(s,{depth,bevelEnabled:false}),cell,o)
+    }
+    c.group('ship',{y:.16})
+    // Open clinker hull: nested narrow outlines, not a solid elliptical block.
+    for(let level=0;level<4;level++) {
+      const l=2.13+level*.09,w=.27+level*.105,y=.28+level*.13
+      const outer=new THREE.Shape(),inner=new THREE.Path()
+      const points=[[-l,0],[-l*.69,-w],[l*.69,-w],[l,0],[l*.69,w],[-l*.69,w]]
+      points.forEach(([x,z],i)=>i?outer.lineTo(x,z):outer.moveTo(x,z));outer.closePath()
+      points.map(([x,z])=>[x*.94,z*.83]).forEach(([x,z],i)=>i?inner.lineTo(x,z):inner.moveTo(x,z));inner.closePath();outer.holes.push(inner)
+      const g=new THREE.ExtrudeGeometry(outer,{depth:.14,bevelEnabled:false});g.rotateX(-Math.PI/2)
+      c.geom(g,CELL.WOOD,{y,label:level===2?'Clinker planking':undefined})
+    }
+    box(3.50,.10,.50,CELL.WOOD,{y:.30,label:'Keel and deck'})
+    for(const x of [-1.42,-.71,0,.71,1.42])box(.10,.09,1.03,CELL.WOOD,{x,y:.71,label:x===0?'Thwarts':undefined})
+    for(const side of [-1,1])tube([[side*1.93,.38,0],[side*2.34,.77,0],[side*2.43,1.26,0],[side*2.26,1.45,0],[side*2.10,1.33,0]],.09,CELL.WOOD,{label:side<0?'Curled stem':undefined})
+    cyl(.065,2.70,CELL.WOOD,{y:1.71,label:'Mast'})
+    cyl(.05,2.76,CELL.WOOD,{y:2.86,rz:Math.PI/2,label:'Yard'})
+    box(2.62,1.31,.045,CELL.CLOTH,{y:2.15,z:.08,label:'Square sail'})
+    for(const x of [-1.02,-.34,.34,1.02])box(.24,1.31,.022,CELL.ACCENT,{x,y:2.15,z:.115})
+    for(const side of [-1,1]) {
+      for(const x of [-1.45,-.87,-.29,.29,.87,1.45]) {
+        cyl(.20,.055,CELL.ACCENT,{x,y:.73,z:side*.59,rx:Math.PI/2,label:side<0&&x===-.29?'Gunwale shields':undefined})
+        cyl(.045,.07,CELL.METAL_DARK,{x,y:.73,z:side*.62,rx:Math.PI/2})
+      }
+      for(const x of [-1.15,-.38,.38,1.15])beam([x,.63,side*.43],[x+.19,.18,side*1.16],.045,CELL.WOOD,side>0&&x===.38?'Oars':undefined)
+    }
+    c.end()
+    return {label:'Clinker-built longship',kind:'hero',pose(t,parts){parts.ship.rotation.x=Math.sin(Math.max(0,Math.min(1,t))*Math.PI*2)*Math.PI/90}}
+  },
+  fountain(c, rand) {
+    const C=(r,h,k,x=0,y=0,z=0,o={},r2=r)=>{const g=new THREE.CylinderGeometry(r,r2,h,12);if(o.spin){g.applyQuaternion(new THREE.Quaternion().setFromEuler(new THREE.Euler(o.rx||0,o.ry||0,o.rz||0)));return c.geom(g,CELL[k],{x,y,z,...o,rx:0,ry:0,rz:0});}return c.geom(g,CELL[k],{x,y,z,...o});};
+    const S=(a,b,d,k,x=0,y=0,z=0,o={})=>{const g=new THREE.SphereGeometry(1,12,8);g.scale(a,b,d);return c.geom(g,CELL[k],{x,y,z,...o});};
+    C(1.2,.25,'STONE',0,.125);C(1.05,.04,'GLASS',0,.27);C(.15,1.4,'STONE',0,.9);for(const [r,y] of [[.7,.85],[.4,1.5]]){C(r,.12,'STONE',0,y);C(r*.9,.02,'GLASS',0,y+.07);}S(.12,.18,.12,'STONE',0,1.75);
+    return {label:"Fountain",kind:"landmark"};
+  },
+  marketstall(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const E=(x,y,z,k,o={})=>{const g=new THREE.SphereGeometry(1,12,8);g.scale(x,y,z);c.geom(g,k,o);};
+    const rod=(a,b,r,k,o={})=>{const u=new THREE.Vector3(...a),v=new THREE.Vector3(...b),d=v.clone().sub(u);const q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.clone().normalize());const g=new THREE.CylinderGeometry(r,r,d.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(q));const p=u.add(v).multiplyScalar(.5);c.geom(g,k,{x:p.x,y:p.y,z:p.z,...o});};
+    const P=(pts,d,k,o={})=>{const s=new THREE.Shape();pts.forEach(([x,y],i)=>i?s.lineTo(x,y):s.moveTo(x,y));s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:false,curveSegments:12});g.translate(0,0,-d/2);c.geom(g,k,o);};
+    for(const x of [-1.15,1.15])for(const z of [-.63,.64])B(.075,2.05,.075,CELL.WOOD,{x,y:1.025,z});
+    P([[-1.34,0],[0,.22],[1.34,0],[1.34,-.055],[0,.16],[-1.34,-.055]],1.6,CELL.CLOTH,{y:2.04});
+    B(2.47,.12,1.01,CELL.WOOD,{y:.91,z:.13});for(const x of [-.94,.94])B(.1,.84,.10,CELL.WOOD,{x,y:.42,z:.13});
+    for(let i=0;i<3;i++){C(.24,.21,CELL.CLOTH,{x:-.76+i*.55,y:1.075,z:.2});E(.21,.15,.20,[CELL.RED,CELL.EARTH,CELL.ACCENT][i],{x:-.76+i*.55,y:1.19,z:.2});}
+    for(let i=0;i<2;i++)C(.13,.67,i?CELL.ACCENT:CELL.CLOTH,{x:-.86+i*.30,y:.13,z:-.29,rx:Math.PI/2});
+    rod([.92,.97,.12],[.92,1.54,.12],.025,CELL.METAL);rod([.65,1.5,.12],[1.2,1.5,.12],.024,CELL.METAL);for(const x of [.67,1.17]){rod([x,1.5,.12],[x,1.22,.12],.015,CELL.METAL);C(.14,.035,CELL.METAL,{x,y:1.20,z:.12});}
+    return {label:'Silk Road spice stall',kind:'landmark'};
+  },
+  tent(c, rand) {
+    const B=(w,h,d,k,x=0,y=0,z=0,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),CELL[k],{x,y,z,...o});
+    const L=(a,b,r,k,o={})=>{const u=new THREE.Vector3(...a),v=new THREE.Vector3(...b),d=v.clone().sub(u);const g=new THREE.CylinderGeometry(r,r,d.length(),8);g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize()));const m=u.add(v).multiplyScalar(.5);return c.geom(g,CELL[k],{x:m.x,y:m.y,z:m.z,...o});};
+    B(2.8,.12,2.6,'EARTH',0,.06);for(const s of [-1,1])B(1.65,.07,2,'CLOTH',s*.65,.85,0,{rz:-s*.85});for(const z of [-1,1])for(const s of [-1,1])L([s*1.2,.12,z],[0,1.5,z],.04,'METAL');for(const s of [-1,1])L([s*.7,.8,.8],[s*1.4,.13,1.25],.018,'LIGHT');
+    return {label:"Tent",kind:"landmark"};
+  },
+  torii(c, rand) {
+    const B=(w,h,d,k,x=0,y=0,z=0,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),CELL[k],{x,y,z,...o});
+    const C=(r,h,k,x=0,y=0,z=0,o={},r2=r)=>{const g=new THREE.CylinderGeometry(r,r2,h,12);if(o.spin){g.applyQuaternion(new THREE.Quaternion().setFromEuler(new THREE.Euler(o.rx||0,o.ry||0,o.rz||0)));return c.geom(g,CELL[k],{x,y,z,...o,rx:0,ry:0,rz:0});}return c.geom(g,CELL[k],{x,y,z,...o});};
+    B(2.6,.1,1.3,'STONE',0,.05);for(const x of [-.85,.85])C(.12,2.3,'RED',x,1.2);B(2.6,.16,.28,'RED',0,2.3);B(2.25,.12,.2,'RED',0,1.85);B(.14,.45,.14,'RED',0,2.05);for(const s of [-1,1])B(.65,.16,.3,'BLACK',s*1,2.46,0,{rz:s*.1});B(1.5,.16,.3,'BLACK',0,2.42);
+    return {label:"Torii",kind:"landmark"};
+  },
+  pagoda(c, rand) {
+    const B=(w,h,d,k,x=0,y=0,z=0,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),CELL[k],{x,y,z,...o});
+    const C=(r,h,k,x=0,y=0,z=0,o={},r2=r)=>{const g=new THREE.CylinderGeometry(r,r2,h,12);if(o.spin){g.applyQuaternion(new THREE.Quaternion().setFromEuler(new THREE.Euler(o.rx||0,o.ry||0,o.rz||0)));return c.geom(g,CELL[k],{x,y,z,...o,rx:0,ry:0,rz:0});}return c.geom(g,CELL[k],{x,y,z,...o});};
+    for(let i=0;i<5;i++){const w=2.3-i*.32,y=.15+i*.5;B(w*.65,.38,w*.65,'STONE',0,y+.19);c.geom(new THREE.CylinderGeometry(w*.18,w*.55,.2,4),CELL.ACCENT,{y:y+.47,ry:Math.PI/4});for(const s of [-1,1])B(w*.6,.05,.08,'ACCENT',s*w*.23,y+.49,0,{rz:s*.1});}C(.03,.35,'METAL',0,2.75);
+    return {label:"Pagoda",kind:"landmark"};
+  },
+  windmill(c, rand) {
+    const box = (w, h, d, cell, o = {}) => c.geom(new THREE.BoxGeometry(w, h, d), cell, o)
+    const cyl = (r, h, cell, o = {}, n = 12) => c.geom(new THREE.CylinderGeometry(r, r, h, n), cell, o)
+    const beam = (a, b, w, cell, label) => {
+      const dx = b[0]-a[0], dy = b[1]-a[1], dz = b[2]-a[2]
+      box(w, Math.hypot(dx, dy, dz), w, cell, { x:(a[0]+b[0])/2, y:(a[1]+b[1])/2, z:(a[2]+b[2])/2,
+        rx:Math.atan2(dz, dy), rz:-Math.atan2(dx, Math.hypot(dy, dz)), label })
+    }
+    const tube = (points, radius, cell, o = {}) => c.geom(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(...p))), Math.max(16, points.length*3), radius, 6, false), cell, o)
+    const plate = (points, depth, cell, o = {}) => {
+      const s = new THREE.Shape()
+      points.forEach(([x,y],i) => i ? s.lineTo(x,y) : s.moveTo(x,y)); s.closePath()
+      c.geom(new THREE.ExtrudeGeometry(s,{depth,bevelEnabled:false}),cell,o)
+    }
+    box(1.30,.13,1.27,CELL.STONE,{y:.065,label:'Trestle base'})
+    cyl(.15,1.06,CELL.WOOD,{y:.65,label:'Main post'})
+    for(const x of [-.55,.55])beam([x,.15,0],[0,1.02,0],.11,CELL.WOOD)
+    c.geom(new THREE.CylinderGeometry(.53,.73,1.24,4),CELL.WOOD,{y:1.69,ry:Math.PI/4,label:'Mill body'})
+    c.geom(new THREE.ConeGeometry(.77,.54,4),CELL.ACCENT,{y:2.58,ry:Math.PI/4})
+    beam([-.40,1.15,-.34],[-1.34,.12,-1.55],.085,CELL.WOOD,'Tail pole')
+    for(const x of [-.20,.20])beam([x,.13,1.10],[x,1.30,.53],.045,CELL.WOOD)
+    for(let i=0;i<6;i++)box(.44,.045,.06,CELL.WOOD,{y:.25+i*.17,z:1.04-i*.083,label:i===3?'Ladder':undefined})
+    cyl(.13,.29,CELL.METAL_DARK,{y:2.04,z:.62,rx:Math.PI/2,label:'Windshaft'})
+    // Offset every lattice member into a common rotor frame before spinning.
+    for(let i=0;i<4;i++) {
+      const a=i*Math.PI/2
+      const part=(w,h,x,y,label)=>{const g=new THREE.BoxGeometry(w,h,.055);g.translate(x,y,0);g.rotateZ(a);c.geom(g,CELL.WOOD,{y:2.04,z:.80,spin:.65,spinAxis:'z',label})}
+      part(.065,1.42,0,.73,i===0?'Lattice sails':undefined)
+      for(const x of [.12,.40])part(.04,1.08,x,.91)
+      for(let j=0;j<5;j++)part(.43,.04,.20,.42+j*.24)
+    }
+    // Continuous rotor spin is explicitly requested instead of a slider pose.
+    return {label:'Medieval post mill',kind:'hero'}
+  },
+  runningtrack(c, rand) {
+    const B=(w,h,d,k,x=0,y=0,z=0,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),CELL[k],{x,y,z,...o});
+    const T=(r,t,k,x=0,y=0,z=0,o={},arc=Math.PI*2)=>c.geom(new THREE.TorusGeometry(r,t,6,24,arc),CELL[k],{x,y,z,...o});
+    const shape=new THREE.Shape();shape.absarc(0,0,1.35,0,Math.PI/2,false);shape.lineTo(0,.65);shape.absarc(0,0,.65,Math.PI/2,0,true);shape.closePath();const g=new THREE.ExtrudeGeometry(shape,{depth:.1,bevelEnabled:false,curveSegments:24});g.rotateX(-Math.PI/2);g.translate(-.7,.1,.7);c.geom(g,CELL.RED,{});for(const r of [.75,.93,1.11,1.29])T(r,.012,'LIGHT',-.7,.12,.7,{rx:-Math.PI/2},Math.PI/2);for(const x of [.2,.7])B(.04,.4,.04,'METAL',x,.3,.4);B(.6,.08,.06,'LIGHT',.45,.52,.4);B(.05,1.2,.05,'METAL',-.6,.6,-.5);
+    return {label:"Running track",kind:"landmark"};
+  },
+  stadium(c, rand) {
+    const box=(w,h,d,cell,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),cell,o)
+    const cyl=(r,h,cell,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),cell,o)
+
+  const g=new THREE.LatheGeometry([[.83,.10],[.95,.26],[1.07,.49],[1.32,.68],[1.39,.68],[1.39,.12],[.83,.10]].map(([x,y])=>new THREE.Vector2(x,y)),28)
+    g.scale(1,1,.78);c.geom(g,CELL.STONE)
+    const field=new THREE.CylinderGeometry(.86,.86,.04,24);field.scale(1,1,.78);c.geom(field,CELL.ACCENT,{y:.10})
+    const baseball=rand()<.5
+    if(baseball){
+      box(.56,.02,.56,CELL.EARTH,{y:.134,z:.14,ry:Math.PI/4})
+      for(const [x,z]of [[0,-.25],[-.39,.14],[.39,.14],[0,.53]])box(.05,.025,.05,CELL.LIGHT,{x,y:.156,z,ry:Math.PI/4})
+    }else{
+      box(1.27,.02,.59,CELL.ACCENT2,{y:.134})
+      for(let i=0;i<7;i++)box(.023,.02,.56,CELL.LIGHT,{x:-.54+i*.18,y:.154})
+    }
+    for(const x of [-1.06,1.06])for(const z of [-.66,.66]){
+      cyl(.035,.94,CELL.METAL,{x,y:1.0,z})
+      box(.32,.15,.09,CELL.LIGHT,{x,y:1.50,z})
+    }
+    box(.70,.40,.10,CELL.ACCENT,{y:1.02,z:-.99})
+    return {label:baseball?'Kansas City baseball stadium':'Kansas City football stadium',kind:'landmark'}
+  },
+  obelisk(c, rand) {
+    const B=(w,h,d,k,x=0,y=0,z=0,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),CELL[k],{x,y,z,...o});
+    B(1.2,.3,1.2,'STONE',0,.15);c.geom(new THREE.CylinderGeometry(.22,.38,2.1,4),CELL.STONE,{y:1.35,ry:Math.PI/4});c.geom(new THREE.ConeGeometry(.22,.4,4),CELL.ACCENT,{y:2.6,ry:Math.PI/4});for(let i=0;i<5;i++)B(.25,.035,.025,'STONE_DARK',0,.6+i*.3,.25);
+    return {label:"Obelisk",kind:"landmark"};
+  },
+  mechanicalclock(c, rand) {
+    const B=(w,h,d,k,x=0,y=0,z=0,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),CELL[k],{x,y,z,...o});
+    const C=(r,h,k,x=0,y=0,z=0,o={},r2=r)=>{const g=new THREE.CylinderGeometry(r,r2,h,12);if(o.spin){g.applyQuaternion(new THREE.Quaternion().setFromEuler(new THREE.Euler(o.rx||0,o.ry||0,o.rz||0)));return c.geom(g,CELL[k],{x,y,z,...o,rx:0,ry:0,rz:0});}return c.geom(g,CELL[k],{x,y,z,...o});};
+    const T=(r,t,k,x=0,y=0,z=0,o={},arc=Math.PI*2)=>c.geom(new THREE.TorusGeometry(r,t,6,24,arc),CELL[k],{x,y,z,...o});
+    const L=(a,b,r,k,o={})=>{const u=new THREE.Vector3(...a),v=new THREE.Vector3(...b),d=v.clone().sub(u);const g=new THREE.CylinderGeometry(r,r,d.length(),8);g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize()));const m=u.add(v).multiplyScalar(.5);return c.geom(g,CELL[k],{x:m.x,y:m.y,z:m.z,...o});};
+    const G=(n,x=0,y=0,z=0,o={})=>c.group(n,{x,y,z,...o}), E=()=>c.end();
+    B(3.2,.18,1.8,'WOOD',0,.09);for(const x of [-1,1])B(.14,2.8,.14,'WOOD',x,1.55,-.2);B(2.3,.15,.3,'WOOD',0,2.75,-.2);
+  G('crown',0,1.9,0);T(.6,.06,'METAL',0,0,0,{label:'Crown wheel'});for(let i=0;i<12;i++){const a=i*Math.PI/6;B(.1,.13,.14,'METAL',.6*Math.cos(a),.6*Math.sin(a),.1,{rz:a});}E();
+  for(const [x,y,r] of [[-.5,1,.38],[.45,.75,.28]]){T(r,.05,'METAL',x,y,0,{label:x<0?'Great wheel':'Gear train'});for(let i=0;i<4;i++)L([x,y,0],[x+r*Math.cos(i*1.57),y+r*Math.sin(i*1.57),0],.025,'METAL');}
+  G('verge',0,2.15,.3);C(.04,.9,'METAL',0,0,0,{label:'Verge'});B(1.7,.07,.08,'WOOD',0,.5,0,{label:'Foliot'});for(const s of [-1,1]){B(.22,.18,.22,'METAL_DARK',s*.7,.5);B(.2,.06,.12,'METAL',s*.08,s*.25,-.1,{label:s>0?'Pallet':undefined});}E();
+  L([-.65,1,0],[-.65,.35,0],.015,'CLOTH',{label:'Weight rope'});B(.24,.3,.25,'METAL_DARK',-.65,.3,0,{label:'Driving weight'});C(.4,.08,'LIGHT',1.35,1.8,0,{rx:Math.PI/2,label:'Dial'});B(.04,.35,.025,'BLACK',1.35,1.95,.06);
+    return {label:"Verge and foliot clock",kind:"hero",pose(t,parts){parts.verge.rotation.y=.35*Math.sin(t*Math.PI*2);parts.crown.rotation.z=t*Math.PI/6}};
+  },
+  lilypond(c, rand) {
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const E=(x,y,z,k,o={})=>{const g=new THREE.SphereGeometry(1,12,8);g.scale(x,y,z);c.geom(g,k,o);};
+    const rod=(a,b,r,k,o={})=>{const u=new THREE.Vector3(...a),v=new THREE.Vector3(...b),d=v.clone().sub(u);const q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.clone().normalize());const g=new THREE.CylinderGeometry(r,r,d.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(q));const p=u.add(v).multiplyScalar(.5);c.geom(g,k,{x:p.x,y:p.y,z:p.z,...o});};
+    E(1.61,.11,1.29,CELL.EARTH,{y:-.075,label:'Pond basin'});E(1.42,.027,1.10,CELL.GLASS,{y:.045,label:'Still water'});
+    for(let i=0;i<13;i++){const a=i*Math.PI*2/13;E(.25,.13,.21,CELL.STONE,{x:1.43*Math.cos(a),y:.10,z:1.11*Math.sin(a),ry:a,label:i===0?'Rock rim':undefined});}
+    for(let i=0;i<5;i++){
+      const x=[-.7,.23,.77,-.25,-.30][i],z=[.17,.49,-.10,-.52,.16][i];
+      if(i===4)c.group('pad',{x,y:.093,z});
+      const s=new THREE.Shape();s.moveTo(0,0);s.absarc(0,0,.23,.17,Math.PI*2-.17,false);s.lineTo(0,0);const g=new THREE.ExtrudeGeometry(s,{depth:.025,bevelEnabled:false});g.rotateX(-Math.PI/2);
+      c.geom(g,CELL.ACCENT,{x:i===4?0:x,y:i===4?0:.085,z:i===4?0:z,ry:rand()*6,label:i===4?'Floating lily pad':undefined});if(i===4)c.end();
+    }
+    for(const x of [.85,1.08]){rod([x,.09,-.72],[x-.07,.87,-.76],.022,CELL.ACCENT,{label:x<1?'Reed stem':undefined});C(.055,.23,CELL.WOOD,{x:x-.07,y:.91,z:-.76,label:x>1?'Reed head':undefined});}
+    return {label:'Lily pond',kind:'hero',loop:6,pose(t,p){const a=2*Math.PI*t;p.pad.position.y=.093+.008*Math.sin(a);p.pad.rotation.z=.028*Math.sin(a);}};
+  },
+  beehive(c, rand) {
+    const box=(w,h,d,cell,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),cell,o)
+    const plate=(pts,d,cell,o={})=>{
+      const s=new THREE.Shape();pts.forEach(([x,y],i)=>i?s.lineTo(x,y):s.moveTo(x,y));s.closePath()
+      c.geom(new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:false}),cell,o)
+    }
+    const roof=(w,h,d,cell,o={})=>plate([[-w/2,0],[w/2,0],[0,h]],d,cell,{...o,z:(o.z||0)-d/2})
+
+  box(1.31,.13,1.03,CELL.WOOD,{y:.065})
+    for(let i=0;i<4;i++){
+      box(1.13,.35,.85,CELL.WOOD,{y:.34+i*.38})
+      box(.30,.06,.025,CELL.METAL_DARK,{y:.35+i*.38,z:.443})
+    }
+    box(1.29,.12,1.00,CELL.METAL,{y:1.72})
+    roof(1.30,.19,1.00,CELL.METAL,{y:1.78})
+    box(.73,.045,.42,CELL.WOOD,{y:.17,z:.61})
+    box(.59,.055,.025,CELL.BLACK,{y:.23,z:.441})
+    // Explicit brief exception: these are abstract hovering dots, no anatomy.
+    for(const [x,y,z]of [[-.31,.49,.84],[.23,.73,.87],[.62,.98,.55]])box(.09,.07,.09,CELL.ACCENT,{x,y,z})
+    return {label:'Langstroth beehive',kind:'landmark'}
+  },
+  campusship(c, rand) {
+    const B=(w,h,d,k,x=0,y=0,z=0,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),CELL[k],{x,y,z,...o});
+    const C=(r,h,k,x=0,y=0,z=0,o={},r2=r)=>{const g=new THREE.CylinderGeometry(r,r2,h,12);if(o.spin){g.applyQuaternion(new THREE.Quaternion().setFromEuler(new THREE.Euler(o.rx||0,o.ry||0,o.rz||0)));return c.geom(g,CELL[k],{x,y,z,...o,rx:0,ry:0,rz:0});}return c.geom(g,CELL[k],{x,y,z,...o});};
+    const S=(a,b,d,k,x=0,y=0,z=0,o={})=>{const g=new THREE.SphereGeometry(1,12,8);g.scale(a,b,d);return c.geom(g,CELL[k],{x,y,z,...o});};
+    const L=(a,b,r,k,o={})=>{const u=new THREE.Vector3(...a),v=new THREE.Vector3(...b),d=v.clone().sub(u);const g=new THREE.CylinderGeometry(r,r,d.length(),8);g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize()));const m=u.add(v).multiplyScalar(.5);return c.geom(g,CELL[k],{x:m.x,y:m.y,z:m.z,...o});};
+    const G=(n,x=0,y=0,z=0,o={})=>c.group(n,{x,y,z,...o}), E=()=>c.end();
+    C(.95,.65,'METAL',0,1.3,0,{label:'Capsule hull'},1.25);S(.95,.45,.95,'ACCENT',0,1.63,0,{label:'Nose cap'});C(1.1,.18,'METAL_DARK',0,.92,0,{label:'Belly skirt'},1.3);
+  for(const x of [-1,1])for(const z of [-1,1]){L([x*.75,1.05,z*.75],[x*1.4,.2,z*1.4],.08,'METAL');C(.27,.16,'METAL_DARK',x*1.4,.08,z*1.4,{label:x>0&&z>0?'Landing foot':undefined});}
+  for(let i=0;i<5;i++){const a=.65+i*1.24;const x=1.095*Math.sin(a),z=1.095*Math.cos(a);const pane=new THREE.CylinderGeometry(.14,.14,.055,12);pane.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),new THREE.Vector3(Math.sin(a),0,Math.cos(a))));c.geom(pane,CELL.GLASS,{x,y:1.4,z,label:i===0?'Portholes':undefined});}
+  C(.04,.6,'METAL',-.5,2,-.25,{label:'Sensor mast'});S(.07,.07,.07,'GLOW',-.5,2.34,-.25,{emissive:.8});B(.62,.72,.04,'GLOW',0,1.15,1.08,{emissive:.35,label:'Lit hatch'});B(.5,.63,.045,'BLACK',0,1.16,1.12);
+  G('ramp',0,.8,1.1,{rx:-Math.PI/2});B(.7,.09,1.5,'METAL',0,0,.75,{label:'Boarding ramp'});for(let i=0;i<6;i++)B(.65,.025,.025,'METAL_DARK',0,.06,.2+i*.2);E();
+    return {label:"Campus lander",kind:"hero",pose(t,parts){parts.ramp.rotation.x=-Math.PI/2+(Math.PI/2+Math.asin(.74/1.5))*t}};
+  },
+  archgate(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const rod=(a,b,r,k,o={})=>{const u=new THREE.Vector3(...a),v=new THREE.Vector3(...b),d=v.clone().sub(u);const q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.clone().normalize());const g=new THREE.CylinderGeometry(r,r,d.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(q));const p=u.add(v).multiplyScalar(.5);c.geom(g,k,{x:p.x,y:p.y,z:p.z,...o});};
+    const P=(pts,d,k,o={})=>{const s=new THREE.Shape();pts.forEach(([x,y],i)=>i?s.lineTo(x,y):s.moveTo(x,y));s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:false,curveSegments:12});g.translate(0,0,-d/2);c.geom(g,k,o);};
+    for(const x of [-1.60,1.60]){
+      B(.79,.22,.87,CELL.STONE,{x,y:.05,label:x<0?'Ground footing':undefined});
+      for(let i=0;i<5;i++)B(.60,.44,.64,CELL.STONE,{x,y:.34+i*.46,label:i===2?(x<0?'West pier':'East pier'):undefined});
+      B(.81,.17,.84,CELL.STONE,{x,y:2.57,label:x<0?'Pier capital':undefined});
+    }
+    B(4.16,.38,.87,CELL.STONE,{y:2.82,label:'Flat lintel'});B(4.27,.09,.98,CELL.LIGHT,{y:3.045,label:'Coping'});
+    rod([-.92,2.62,.21],[.92,2.62,.21],.042,CELL.METAL,{label:'Banner rail'});
+    c.group('banner',{y:2.58,z:.21});P([[-.63,0],[.63,0],[.63,-.76],[0,-1.04],[-.63,-.76]],.045,CELL.ACCENT,{label:'Island banner'});c.end();
+    return {label:'Island gateway',kind:'hero',loop:4,pose(t,p){p.banner.rotation.x=.13*Math.sin(2*Math.PI*t);}};
+  },
+  triumphalarch(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const A=(w,h,t,d,k,o={})=>{const r=w/2,cy=h-r-t,s=new THREE.Shape();s.moveTo(-r-t,0);s.lineTo(-r-t,cy);s.absarc(0,cy,r+t,Math.PI,0,true);s.lineTo(r+t,0);s.lineTo(r,0);s.lineTo(r,cy);s.absarc(0,cy,r,0,Math.PI,false);s.lineTo(-r,0);s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:false,curveSegments:12});g.translate(0,0,-d/2);c.geom(g,k,o);};
+    A(.78,1.57,.22,.52,CELL.STONE);for(const x of [-1.02,1.02])A(.40,1.24,.16,.51,CELL.STONE,{x});
+    B(2.86,.34,.67,CELL.STONE,{y:1.76});B(1.16,.21,.055,CELL.LIGHT,{y:1.77,z:.365});
+    for(const x of [-1.34,-.57,.57,1.34]){C(.07,1.30,CELL.STONE,{x,y:.65,z:.34});B(.22,.10,.21,CELL.STONE,{x,y:1.34,z:.34});}
+    B(.64,.22,.4,CELL.METAL,{y:2.14,z:-.03});for(let i=0;i<4;i++)c.geom(new THREE.ConeGeometry(.105,.30,6),CELL.METAL,{x:-.39+i*.26,y:2.19,z:.29});
+    return {label:'Roman triumphal arch',kind:'landmark'};
+  },
+  lookouttower(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const rod=(a,b,r,k,o={})=>{const u=new THREE.Vector3(...a),v=new THREE.Vector3(...b),d=v.clone().sub(u);const q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.clone().normalize());const g=new THREE.CylinderGeometry(r,r,d.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(q));const p=u.add(v).multiplyScalar(.5);c.geom(g,k,{x:p.x,y:p.y,z:p.z,...o});};
+    const T=(pts,r,k,o={})=>c.geom(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(p=>new THREE.Vector3(...p))),24,r,6,false),k,o);
+    C(.44,2.77,CELL.STONE,{y:1.385,label:'Central tower'});C(.59,.18,CELL.STONE_DARK,{y:.045,label:'Footing'});
+    const rail=[];
+    for(let i=0;i<24;i++){
+      const a=i*Math.PI*1.65/23,h=.10+i*.104;
+      const shape=new THREE.Shape();shape.moveTo(.44*Math.cos(a),.44*Math.sin(a));shape.lineTo(1.01*Math.cos(a),1.01*Math.sin(a));shape.lineTo(1.01*Math.cos(a+.20),1.01*Math.sin(a+.20));shape.lineTo(.44*Math.cos(a+.20),.44*Math.sin(a+.20));shape.closePath();
+      const g=new THREE.ExtrudeGeometry(shape,{depth:.068,bevelEnabled:false});g.rotateX(-Math.PI/2);c.geom(g,CELL.WOOD,{y:h,label:i===10?'Spiral stair':undefined});
+      if(i%2===0)C(.027,.50,CELL.METAL,{x:.98*Math.cos(a+.1),y:h+.31,z:-.98*Math.sin(a+.1)});
+      rail.push([.98*Math.cos(a+.1),h+.58,-.98*Math.sin(a+.1)]);
+    }
+    T(rail,.033,CELL.METAL,{label:'Stair handrail'});
+    C(1.13,.14,CELL.WOOD,{y:2.72},12);
+    for(let i=0;i<12;i++){
+      const a=i*Math.PI/6,x=1.05*Math.cos(a),z=1.05*Math.sin(a);
+      if(i!==2&&i!==3){C(.038,.51,CELL.WOOD,{x,y:3.02,z});const b=a+Math.PI/6;rod([x,3.27,z],[1.05*Math.cos(b),3.27,1.05*Math.sin(b)],.04,CELL.WOOD,{label:i===7?'Gallery railing':undefined});}
+    }
+    for(const x of [-.67,.67])for(const z of [-.67,.67])B(.075,.86,.075,CELL.WOOD,{x,y:3.12,z,label:x<0&&z<0?'Roof post':undefined});
+    c.geom(new THREE.ConeGeometry(1.36,.56,4),CELL.ACCENT,{y:3.69,ry:Math.PI/4,label:'Shelter roof'});
+    return {label:'Spiral lookout tower',kind:'hero',pose(t,p){}};
+  },
+  belltower(c, rand) {
+    const B=(w,h,d,k,x=0,y=0,z=0,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),CELL[k],{x,y,z,...o});
+    const C=(r,h,k,x=0,y=0,z=0,o={},r2=r)=>{const g=new THREE.CylinderGeometry(r,r2,h,12);if(o.spin){g.applyQuaternion(new THREE.Quaternion().setFromEuler(new THREE.Euler(o.rx||0,o.ry||0,o.rz||0)));return c.geom(g,CELL[k],{x,y,z,...o,rx:0,ry:0,rz:0});}return c.geom(g,CELL[k],{x,y,z,...o});};
+    B(1.1,1.6,1.1,'STONE',0,.8);B(.35,.65,.03,'BLACK',0,.35,.57);for(const x of [-.45,.45])for(const z of [-.45,.45])B(.14,.8,.14,'STONE',x,2,z);C(.14,.4,'ACCENT2',0,2.05,0,{},.3);for(const s of [-1,1])B(.85,.1,1.3,'ACCENT',s*.33,2.57,0,{rz:-s*.5});
+    return {label:"Bell tower",kind:"landmark"};
+  },
   // END BRAIN PIECES
   }
 }
