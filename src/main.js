@@ -21,6 +21,7 @@ import { FAMOUS } from './data/famous.js'
 import { chipFace } from './agents/family.js'
 import { PEOPLE } from './agents/family.js'
 import { Life } from './life/index.js'
+import { PORTAL_URL } from './life/portal.js'
 
 /**
  * Boot and the frame loop.
@@ -286,6 +287,22 @@ function cardFor(hit) {
   return info ? { kicker: 'Campus', title: info[0], text: info[1], accent: BRAND.purple } : null
 }
 
+/** Through the portal: a shimmer in UA purple washes the screen, then you're at the School of Brain. */
+let beaming = false
+function beamToBrain() {
+  if (beaming) return
+  beaming = true
+  hud.toast('Beaming to the School of Brain…')
+  const beam = document.createElement('div')
+  beam.className = 'beam'
+  beam.style.setProperty('--beam', '#E501FF')
+  document.body.appendChild(beam)
+  setTimeout(() => {
+    if (vr.active) vr.exit?.()
+    window.location.href = PORTAL_URL
+  }, 1150)
+}
+
 /** The schools are real worlds: planets in the JARVIS Brain, and recipes in the dinner app. */
 const SCHOOL_LINKS = { recipes: 'https://dinner.kcproto.com/' }
 function openSchool(id) {
@@ -333,6 +350,10 @@ engine.canvas.addEventListener('pointerup', (e) => {
     }
     if (o?.userData.tag === 'badge') {
       playBadge(o.userData.id)
+      return
+    }
+    if (o?.userData.tag === 'portal') {
+      beamToBrain()
       return
     }
     if (o?.userData.id) {
@@ -387,6 +408,7 @@ const labels = (() => {
     el.style.pointerEvents = 'none'
     el.addEventListener('click', () => {
       if (l.kind === 'castle') flyTo(l.id)
+      else if (l.kind === 'portal') beamToBrain()
       else if (l.kind === 'school') openSchool(l.school)
       else {
         rig.focus(new THREE.Vector3(l.x, 0, l.z), { distance: 70 })
@@ -407,7 +429,7 @@ const labels = (() => {
     const h = engine.canvas.clientHeight
     for (const it of items) {
       // far out only the castles and the heart read; zoomed in everything does
-      const want = visible && (it.l.kind === 'castle' || it.l.kind === 'hall' || it.l.kind === 'school' || far < 260) && far < 420
+      const want = visible && (it.l.kind === 'castle' || it.l.kind === 'hall' || it.l.kind === 'school' || it.l.kind === 'portal' || far < 260) && far < 420
       v.set(it.l.x, it.l.y, it.l.z).project(cam)
       const onScreen = want && v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1
       if (onScreen) {
@@ -515,7 +537,7 @@ function famousHome(f) {
 }
 
 // ── VR ──────────────────────────────────────────────────────────────────────────────────
-const vr = installVr({ engine, rig, hud, astronauts, campus, cardFor, lite: LITE, onPick: (hit) => { if (hit.tag === 'badge') playBadge(hit.id) } })
+const vr = installVr({ engine, rig, hud, astronauts, campus, cardFor, lite: LITE, onPick: (hit) => { if (hit.tag === 'badge') playBadge(hit.id); if (hit.tag === 'portal') beamToBrain() } })
 
 // ── the intro: from high above, down onto the plaza ────────────────────────────────────
 let savedHome = null

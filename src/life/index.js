@@ -16,6 +16,7 @@ import { BeachLife } from './beach.js'
 import { Dogs, Ducks } from './critters.js'
 import { Bus, Bikes, Steam } from './traffic.js'
 import { castleActivities } from './castles.js'
+import { BrainPortal } from './portal.js'
 
 export class Life {
   constructor(scene, campus, { lite = false, shadows = true, nav = null } = {}) {
@@ -117,6 +118,9 @@ export class Life {
     add(new Bus(g, { shadows }))
     add(new Bikes(g, { count: lite ? 2 : 5, shadows }))
     add(new Steam(g, placed('foodtruck').map((t) => ({ x: t.x, z: t.z, ry: t.ry }))))
+
+    // the portal to the School of Brain, in its clearing in the east woods
+    if (campus.portal) this.portal = add(new BrainPortal(g, campus.portal, campus, { shadows }))
 
     // each castle's own activity
     for (const part of castleActivities(g, campus, CASTLES, { shadows })) add(part)

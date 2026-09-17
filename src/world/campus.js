@@ -1133,6 +1133,20 @@ export function buildCampus(scene, { shadows = true, lite = false, merge = true 
     for (const c of cands.slice(0, 20)) spots.grounds.push({ x: c.x, z: c.z })
   }
 
+  // ── the Brain Portal: a clearing in the east woods (campus life builds the gate) ────────
+  const portalSpot = (() => {
+    for (const [x, z] of [[205, -5], [208, -12], [202, 4], [212, -2]]) {
+      if (!inIsland(x, z, 14) || inWater(x, z, 10)) continue
+      reserved.push({ x, z, r: 10 })
+      obstacles.push({ x, z, r: 5 })
+      solids.push(new THREE.Box3(new THREE.Vector3(x - 9, 0, z - 9), new THREE.Vector3(x + 9, 8, z + 9)))
+      landmarks.push({ id: 'brainportal', name: 'Portal to the School of Brain', x, y: 11, z, kind: 'portal' })
+      for (let i = 0; i < 8; i++) spots.grounds.push({ x: x + Math.cos(i) * 7.5, z: z + Math.sin(i) * 7.5 })
+      return { x, z }
+    }
+    return null
+  })()
+
   // ── the harbour on the south coast, ships at sea, canoes and footbridges on the river ───
   {
     placeAny('ferryterminal', [{ x: 0, z: rimS - 10 }, { x: 0, z: rimS - 13 }], { district: 'grounds' })
@@ -1697,6 +1711,7 @@ export function buildCampus(scene, { shadows = true, lite = false, merge = true 
     beach,
     flagSpots,
     activitySpots,
+    portal: portalSpot,
     ponds: waters.filter((w) => w.r).map((w) => ({ name: w.name, x: w.x, z: w.z, r: w.r })),
     footbridges,
     pitches,
