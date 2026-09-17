@@ -322,6 +322,8 @@ export function buildCampus(scene, { shadows = true, lite = false, merge = true 
   const reserved = []
   const footbridges = []
   const flagSpots = []
+  /** Open ground held back for each castle's signature activity (campus life fills it). */
+  const activitySpots = {}
   const pitches = []
   const lakeInfo = {}
   const rejected = []
@@ -1019,6 +1021,33 @@ export function buildCampus(scene, { shadows = true, lite = false, merge = true 
         if (place(name, x, z, { district: castle.id, ry: rand() * P * 2, pad: 0 })) break
       }
     }
+    // each castle's own activity needs a clear patch of lawn near its forecourt: find one now,
+    // before the trees go in, and hold it
+    {
+      const R0 = { perseverance: 10, teamwork: 7.5, creative: 5.5, economic: 5.5, social: 4.5, environmental: 6.5 }[castle.id] || 6
+      const fx0 = pose.x + fx * fore
+      const fz0 = pose.z + fz * fore
+      let best = null
+      let R = R0
+      for (; R >= R0 * 0.65 && !best; R -= 0.5)
+      for (let x = cell.x0 + R; x <= cell.x1 - R; x += 1.5)
+        for (let z = cell.z0 + R; z <= cell.z1 - R; z += 1.5) {
+          const box = new THREE.Box3(new THREE.Vector3(x - R, 0, z - R), new THREE.Vector3(x + R, 3, z + R))
+          if (boxHitsSolids(box, 0) || boxHitsRects(box, 0) || boxHitsWater(box, 0) || !inIsland(x, z, 6)) continue
+          if ([...kiosks.values()].some((k) => Math.hypot(k.x - x, k.z - z) < R + 1.5)) continue
+          const d = Math.hypot(x - fx0, z - fz0)
+          if (!best || d < best.d) best = { x, z, d }
+        }
+      if (best) {
+        R += 0.5
+        activitySpots[castle.id] = { x: best.x, z: best.z, r: R }
+        reserved.push({ x: best.x, z: best.z, r: R + 1 })
+        solids.push(new THREE.Box3(new THREE.Vector3(best.x - R, 0, best.z - R), new THREE.Vector3(best.x + R, 3, best.z + R)))
+      } else if (castle.id === 'perseverance') {
+        // no open lawn in this tight cell: the runners do laps round the castle's forecourt instead
+        activitySpots[castle.id] = { x: fx0, z: fz0, r: 0, rect: { hw: (horizontal ? 30 : 12) / 2 + 1.2, hd: (horizontal ? 12 : 30) / 2 + 1.2 } }
+      } else console.warn('[campus] no room for the activity at', castle.id)
+    }
     const list = (spots[castle.id] = [])
     for (let i = 0; i < 40; i++) {
       const ax = (rand() - 0.5) * 26
@@ -1581,7 +1610,7 @@ export function buildCampus(scene, { shadows = true, lite = false, merge = true 
       if (open.length) spots[k] = open
     }
   }
-  const standable = (p) => inIsland(p.x, p.z, 3) && !inWater(p.x, p.z, 1) && !inPlaced(p.x, p.z, 0.6)
+  const standable = (p) => inIsland(p.x, p.z, 3) && !inWater(p.x, p.z, 1) && !inPlaced(p.x, p.z, 0.6) && !Object.values(activitySpots).some((a) => Math.hypot(a.x - p.x, a.z - p.z) < a.r + 0.5)
   for (const k of Object.keys(spots)) spots[k] = spots[k].filter(standable)
   console.log('[campus] unplaced', [...new Set(rejected)].join(','), '| stamps dropped', dropped)
 
@@ -1667,6 +1696,8 @@ export function buildCampus(scene, { shadows = true, lite = false, merge = true 
     placed,
     beach,
     flagSpots,
+    activitySpots,
+    ponds: waters.filter((w) => w.r).map((w) => ({ name: w.name, x: w.x, z: w.z, r: w.r })),
     footbridges,
     pitches,
     lake: lakeInfo,

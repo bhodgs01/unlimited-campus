@@ -13,9 +13,12 @@ import { Queue, Shoppers } from './crowds.js'
 import { Kites, Birds, Flags } from './air.js'
 import { LampPools } from './glow.js'
 import { BeachLife } from './beach.js'
+import { Dogs, Ducks } from './critters.js'
+import { Bus, Bikes, Steam } from './traffic.js'
+import { castleActivities } from './castles.js'
 
 export class Life {
-  constructor(scene, campus, { lite = false, shadows = true } = {}) {
+  constructor(scene, campus, { lite = false, shadows = true, nav = null } = {}) {
     this.group = new THREE.Group()
     this.group.name = 'life'
     scene.add(this.group)
@@ -106,6 +109,17 @@ export class Life {
     this.lamps = new LampPools(g, campus.lamps || [])
 
     add(beach ? new BeachLife(g, beach, { lite, shadows }) : null)
+
+    // the small touches: dogs, ducks, the bus, bikes, steam off the food trucks
+    const blocked = (x, z) => (nav ? nav.isBlocked(x, z) : false)
+    add(new Dogs(g, this.soccer, lite ? [] : [{ x: 42, z: 66, r: 7 }, { x: -46, z: 90, r: 6 }, { x: 0, z: -48, r: 8 }], { blocked }))
+    add(new Ducks(g, (campus.ponds || []).map((p) => ({ ...p, rf: p.name === 'lake' ? 0.44 : 0.55 }))))
+    add(new Bus(g, { shadows }))
+    add(new Bikes(g, { count: lite ? 2 : 5, shadows }))
+    add(new Steam(g, placed('foodtruck').map((t) => ({ x: t.x, z: t.z, ry: t.ry }))))
+
+    // each castle's own activity
+    for (const part of castleActivities(g, campus, CASTLES, { shadows })) add(part)
 
     this.entries = this.parts.flatMap((p) => p.entries || [])
   }

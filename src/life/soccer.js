@@ -412,7 +412,8 @@ export class Soccer {
         }
         this.onGoal?.(this)
       } else {
-        // goal kick for the defending side
+        // goal kick for the defending side (a dog on the touchline goes to see where it went)
+        this.onOut?.(this, ball.x, ball.z)
         const def = this.teams[1 - side]
         ball.x = pitch.x + (side === 0 ? half - 3 : -half + 3)
         ball.z = pitch.z
@@ -423,6 +424,7 @@ export class Soccer {
       }
     } else if (Math.abs(lateral) > pitch.d / 2) {
       // throw-in: back onto the pitch
+      this.onOut?.(this, ball.x, ball.z)
       ball.z = pitch.z + Math.sign(lateral) * (pitch.d / 2 - 0.6)
       ball.vz = -Math.sign(lateral) * 5
       ball.vx *= 0.3

@@ -84,7 +84,7 @@ const nav = new Navigation()
 nav.rebuild(campus.obstacles)
 
 // campus life: games, class, lunch lines, the beach; its people are puppets in the crowd
-const life = new Life(engine.scene, campus, { lite: LITE, shadows })
+const life = new Life(engine.scene, campus, { lite: LITE, shadows, nav })
 const CROWD = (LITE ? 160 : 420) + life.entries.length
 if (settings.get('maxAgents') < CROWD) settings.set('maxAgents', CROWD)
 const astronauts = new Astronauts(engine.scene, settings)
