@@ -42,7 +42,8 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (needsAuth(req.headers.host)) {
-    const publicAsset = /^\/(icon-(192|512)\.png|apple-touch-icon\.png|favicon\.ico|(badges|castles|models|family)\/.+)$/.test(url.pathname)
+    // the app shell an installer fetches without cookies: manifest, icons, service worker
+    const publicAsset = /^\/(icon-(192|512|maskable-512)\.png|apple-touch-icon\.png|favicon(-48\.png|\.ico)|manifest\.webmanifest|sw\.js|(badges|castles|models|family)\/.+)$/.test(url.pathname)
     if (url.pathname === '/api/login' && req.method === 'POST') {
       let body = ''
       req.on('data', (c) => {

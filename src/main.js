@@ -637,6 +637,11 @@ async function boot() {
 }
 boot()
 
+// installable as an app (the worker caches nothing; see public/sw.js)
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch((err) => console.warn('service worker', err)))
+}
+
 engine.canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); console.warn('webgl context lost'); hud.toast('Graphics context lost, reloading…', 'err'); setTimeout(() => location.reload(), 1500) })
 
 // handy for probes
