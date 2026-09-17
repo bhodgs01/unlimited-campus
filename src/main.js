@@ -339,6 +339,12 @@ engine.canvas.addEventListener('pointerup', (e) => {
         }
       }
     }
+    return
+  }
+  // a click on open ground lets go of whoever you were following
+  if (following) {
+    rig.unfollow()
+    hud.closeCard()
   }
 })
 // hover ring under the student the cursor is on
@@ -443,6 +449,10 @@ engine.scene.add(mark)
 const peopleSpots = [...campus.spots.plaza, ...campus.spots.grounds.slice(0, 80)]
 const people = new People(engine.scene, nav, peopleSpots)
 let following = null
+rig.onUnfollow = () => {
+  following = null
+  hud.setActivePerson(null)
+}
 function findPerson(id) {
   const p = people.get(id)
   if (!p) return
@@ -453,6 +463,7 @@ function findPerson(id) {
     hud.closeCard()
     return
   }
+  rig.unfollow()
   following = id
   rig.follow(() => p.pos)
   rig.desiredDistance = Math.min(rig.desiredDistance, 24)

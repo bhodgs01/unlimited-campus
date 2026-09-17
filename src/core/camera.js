@@ -213,7 +213,7 @@ export class CameraRig {
    * reads as slipping, however small the lag.
    */
   _dragGround(clientX, clientY) {
-    if (this.followFn) this.followFn = null // taking the wheel drops the ride-along
+    this.unfollow() // taking the wheel drops the ride-along
     if (!this._hasAnchor) return
     if (!this.groundPoint(clientX, clientY, this._hit)) return
 
@@ -306,12 +306,20 @@ export class CameraRig {
 
   /** Glide the view to a world point without yanking it — used when you pick an astronaut. */
   focus(point, { distance } = {}) {
+    this.unfollow() // choosing a place ends any ride-along
     this.desiredTarget.copy(point)
     this.desiredTarget.y = 0
     this._clampTarget()
     if (distance) this.desiredDistance = THREE.MathUtils.clamp(distance, MIN_DIST, MAX_DIST)
     this._zoom = null
     this.idleFor = 99 // settle to isometric right away rather than after a pause
+  }
+
+  /** Stop riding along, and tell whoever set it (the find-me chips) so they can clear. */
+  unfollow() {
+    if (!this.followFn) return
+    this.followFn = null
+    this.onUnfollow?.()
   }
 
   /** Ride along with a moving point (an astronaut). Pass null to stop. */
@@ -326,7 +334,7 @@ export class CameraRig {
 
   resetView() {
     this.orbiting = false
-    this.followFn = null
+    this.unfollow()
     if (this.home) {
       this.desiredTarget.set(this.home.x, 0, this.home.z)
       this.desiredDistance = THREE.MathUtils.clamp(this.home.distance, MIN_DIST, MAX_DIST)
