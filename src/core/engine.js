@@ -166,7 +166,13 @@ export class Engine {
       }
     }
 
-    this.resize()
+    // a new render scale from the settings panel is the user's call: the governor starts over
+    if (this._lastRenderScale !== s.get('renderScale')) {
+      this._lastRenderScale = s.get('renderScale')
+      this._governedScale = null
+      this._dropped = false
+    }
+    this.resize(true)
   }
 
   _ensureComposer() {
@@ -228,7 +234,7 @@ export class Engine {
     this.tiltShift = null
   }
 
-  resize() {
+  resize(force = false) {
     const parent = this.canvas.parentElement
     if (!parent) return
     const w = Math.max(1, parent.clientWidth)
@@ -237,9 +243,14 @@ export class Engine {
     this.camera.aspect = w / h
     this.camera.updateProjectionMatrix()
 
-    const scale = this._targetScale()
+    // once the governor has lowered the scale it stays lowered: resetting it here on every
+    // focus or layout event made the governor drop it again a few seconds later, and each of
+    // those resizes blanked a frame
+    const scale = Math.min(this._targetScale(), this._governedScale ?? Infinity)
     const bw = Math.max(1, Math.round(w * scale))
     const bh = Math.max(1, Math.round(h * scale))
+    // setting a canvas's size clears it, even to the same size: skip when nothing changed
+    if (!force && this.viewport && this.viewport.bw === bw && this.viewport.bh === bh && this.viewport.w === w && this.viewport.h === h) return
 
     // Only the drawing buffer is sized here. The element's own size is left to the CSS
     // (`position: absolute; inset: 0`), because a hand-written width is a second opinion
@@ -250,6 +261,9 @@ export class Engine {
     this.tiltShift?.setSize(bw, bh)
     this.tiltShift?.setCamera(this.camera)
     this.viewport = { w, h, bw, bh, scale }
+    // a resize can land after this frame was drawn (a ResizeObserver runs after animation
+    // frames): draw again now so the compositor never presents the cleared canvas
+    if (this.running && !this.renderer.xr?.isPresenting) this.renderFrame()
   }
 
   /**
@@ -423,6 +437,7 @@ export class Engine {
       this.tiltShift?.setSize(bw, bh)
     this.tiltShift?.setCamera(this.camera)
       this.viewport = { ...this.viewport, bw, bh, scale: next }
+      this._governedScale = next
       this.autoScaled = next < ceiling - 0.01
       // setSize clears the buffer after this frame was drawn; draw again now so the compositor
       // never presents the cleared canvas
