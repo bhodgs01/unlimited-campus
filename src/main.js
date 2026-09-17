@@ -271,7 +271,7 @@ function cardFor(hit) {
       space: ['Space', 'Saturn V, the ISS, JWST, Hubble, a launchpad, a Mars rover and a moon base.'],
     }[sid]
     if (!SCHOOL) return null
-    return { kicker: 'School', title: `School of ${SCHOOL[0]}`, text: SCHOOL[1], accent: BRAND.lime, actions: [{ label: 'Fly there', fn: () => { const l = campus.landmarks.find((m) => m.id === `school:${sid}`); if (l) rig.focus(new THREE.Vector3(l.x, 0, l.z), { distance: 48 }) }, primary: true }, { label: 'Open in the Brain', fn: () => window.open(`https://brain.kcproto.com/${sid}`, '_blank', 'noopener') }] }
+    return { kicker: 'School', title: `School of ${SCHOOL[0]}`, text: SCHOOL[1], accent: BRAND.lime, actions: [{ label: 'Fly there', fn: () => { const l = campus.landmarks.find((m) => m.id === `school:${sid}`); if (l) rig.focus(new THREE.Vector3(l.x, 0, l.z), { distance: 48 }) }, primary: true }, { label: sid === 'recipes' ? 'Open Dinner' : 'Open in the Brain', fn: () => openSchool(sid) }] }
   }
   const INFO = {
     hall: ['The Great Hall', 'Where the AI tutor lives. Every lesson starts here.'],
@@ -286,11 +286,13 @@ function cardFor(hit) {
   return info ? { kicker: 'Campus', title: info[0], text: info[1], accent: BRAND.purple } : null
 }
 
-/** The schools are real worlds in the JARVIS Brain: open the live page. */
+/** The schools are real worlds: planets in the JARVIS Brain, and recipes in the dinner app. */
+const SCHOOL_LINKS = { recipes: 'https://dinner.kcproto.com/' }
 function openSchool(id) {
   if (!id) return
-  hud.toast(`Opening the School of ${id} in the Brain…`)
-  window.open(`https://brain.kcproto.com/${id}`, '_blank', 'noopener')
+  const url = SCHOOL_LINKS[id] || `https://brain.kcproto.com/${id}`
+  hud.toast(SCHOOL_LINKS[id] ? `Opening ${new URL(url).hostname}…` : `Opening the School of ${id} in the Brain…`)
+  window.open(url, '_blank', 'noopener')
 }
 
 // ── picking ─────────────────────────────────────────────────────────────────────────────
