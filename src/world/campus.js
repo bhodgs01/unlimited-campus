@@ -525,59 +525,6 @@ export function buildCampus(scene, { shadows = true, lite = false, merge = true 
   }
 
   /** A framed picture on two posts: a painting (image path) or a canvas texture. */
-  const billboard = (image, w, h, x, z, ry, accent = '#E501FF') => {
-    const g = new THREE.Group()
-    const dark = new THREE.MeshStandardMaterial({ color: 0x202020, roughness: 0.6, metalness: 0.2 })
-    const lift = 3.2
-    for (const s of [-1, 1]) {
-      const post = new THREE.Mesh(new THREE.BoxGeometry(0.35, lift + h + 0.6, 0.35), dark)
-      post.position.set(s * (w / 2 - 0.4), (lift + h + 0.6) / 2, -0.25)
-      post.castShadow = true
-      g.add(post)
-    }
-    const frame = new THREE.Mesh(new THREE.BoxGeometry(w + 0.5, h + 0.5, 0.3), dark)
-    frame.position.set(0, lift + h / 2, -0.1)
-    frame.castShadow = true
-    g.add(frame)
-    const map = typeof image === 'string' ? artTexture(image) : image
-    const pic = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map, toneMapped: true }))
-    pic.position.set(0, lift + h / 2, 0.07)
-    g.add(pic)
-    const strip = new THREE.Mesh(new THREE.BoxGeometry(w + 0.5, 0.16, 0.34), new THREE.MeshStandardMaterial({ color: accent, emissive: new THREE.Color(accent), emissiveIntensity: 0.9 }))
-    strip.position.set(0, lift - 0.2, -0.1)
-    g.add(strip)
-    g.position.set(x, 0, z)
-    g.rotation.y = ry
-    return g
-  }
-  const mentorWall = (title, lines) => {
-    const cv = document.createElement('canvas')
-    cv.width = 1024
-    cv.height = 640
-    const ctx = cv.getContext('2d')
-    const grad = ctx.createLinearGradient(0, 0, 0, 640)
-    grad.addColorStop(0, '#26122e')
-    grad.addColorStop(1, '#141414')
-    ctx.fillStyle = grad
-    ctx.fillRect(0, 0, 1024, 640)
-    ctx.fillStyle = '#E501FF'
-    ctx.fillRect(48, 52, 10, 70)
-    ctx.fillStyle = '#ffffff'
-    ctx.font = 'bold 54px Helvetica, Arial, sans-serif'
-    ctx.fillText(title, 78, 108)
-    ctx.font = '400 29px "Open Sans", Helvetica, Arial, sans-serif'
-    lines.forEach((l, i) => {
-      ctx.fillStyle = i % 2 ? '#d9d9d9' : '#ffffff'
-      ctx.fillText(l, 58, 180 + i * 44)
-    })
-    ctx.fillStyle = '#AFFF00'
-    ctx.font = 'italic 26px "Open Sans", Helvetica, Arial, sans-serif'
-    ctx.fillText('Mentors from the Unlimited Awesome community', 58, 612)
-    const t = new THREE.CanvasTexture(cv)
-    t.colorSpace = THREE.SRGBColorSpace
-    t.anisotropy = 4
-    return t
-  }
 
   // ── roads: the grid, broken wherever the river runs, with a Brain bridge over each gap ──
   const ROAD_W = 6
@@ -704,28 +651,6 @@ export function buildCampus(scene, { shadows = true, lite = false, merge = true 
   place('observatory', 32, -80, { district: 'plaza', ry: -P / 2, id: 'observatory', tag: 'observatory' })
   placeAny('clocktower', [{ x: -18, z: -66 }, { x: -22, z: -68 }], { district: 'plaza' })
   placeAny('lecturehall', [{ x: 22, z: -67, ry: P }, { x: 44, z: -67, ry: P }], { district: 'plaza' })
-  {
-    const ROLES = [
-      ["190+ World-Class Mentors", ["World's First Chief AI Officer @ IBM", 'Former CEO of Blockbuster & 7-Eleven', 'Founder of Atari & Chuck E Cheese', 'Former Head of Innovation @ Nike', 'Former Global CTO @ Lenovo', 'Professor @ Harvard Medical School', 'Inventor of VOIP & Siri', 'Grandfather of Virtual Reality', 'Former GM of Epic Games']],
-      ['Builders, Founders, Scientists', ['CEO of Unanimous AI', 'Former Head of Sales @ Facebook (now Meta)', 'IEEE Executive, Learning Technology Standards', 'Former Head of MIT Reality Hack', 'Founder of Digital Media Zone', 'Global Microsoft Retail Startups Lead', 'Data Centre & Quantum Engineer', 'Director/Producer, Hollywood', '#1 Futurist in the world']],
-    ]
-    ROLES.forEach(([title, lines], i) => {
-      const s = i === 0 ? -1 : 1
-      for (const x of [s * 13, s * 12, s * 14]) {
-        const board = billboard(mentorWall(title, lines), 7.2, 4.5, x, -76, 0, i === 0 ? '#E501FF' : '#AFFF00')
-        board.updateMatrixWorld(true)
-        const box = new THREE.Box3().setFromObject(board)
-        if (boxHitsSolids(box, 0.2) || boxHitsRects(box, 0.2)) continue
-        group.add(board)
-        solids.push(box)
-        board.userData.id = 'mentorshall'
-        board.userData.tag = 'mentors'
-        pickables.push(board)
-        placed.push({ name: 'billboard', built: { root: board, animated: false }, x, z: -76, ry: 0, box })
-        break
-      }
-    })
-  }
   place('sundial', -46, -64, { district: 'grounds', solid: false })
   place('statueplinth', 48, -64, { district: 'grounds', solid: false })
   for (let i = 0; i < 20; i++) spots.grounds.push({ x: -36 + (i % 10) * 8, z: i < 10 ? -70 : -93 })
