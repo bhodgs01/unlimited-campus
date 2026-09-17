@@ -197,6 +197,19 @@ export class Engine {
     // lamps, sparks and the sun's disc clear it, so lit surfaces stay crisp.
     this.bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), this.settings.get('bloomStrength'), 0.55, 0.92)
     composer.addPass(this.bloomPass)
+    // One NaN pixel anywhere in the scene (a degenerate normal, a zero-length vector on some
+    // GPU) gets blurred by the bloom mips across a huge rectangle, and NaN added to the frame
+    // renders black: that was the black bar. The glow only ever reads sanitized light.
+    {
+      const hp = this.bloomPass.materialHighPassFilter
+      const line = 'vec4 texel = texture2D( tDiffuse, vUv );'
+      if (hp.fragmentShader.includes(line)) {
+        hp.fragmentShader = hp.fragmentShader.replace(line, `${line}
+          if ( any( isnan( texel ) ) || any( isinf( texel ) ) ) texel = vec4( 0.0 );
+          texel.rgb = min( texel.rgb, vec3( 64.0 ) );`)
+        hp.needsUpdate = true
+      } else console.warn('[engine] bloom high-pass shader changed; NaN guard not applied')
+    }
 
     // After bloom, so an out-of-focus lamp keeps its glow and the glow goes soft with it
     // — blurring first would drop those pixels under the bloom threshold and switch the

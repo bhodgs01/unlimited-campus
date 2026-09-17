@@ -131,7 +131,9 @@ const common = {
       // Under about a third of a pixel there is nothing to gather that the centre tap does
       // not already have, and the whole in-focus band takes this branch.
       if ( radius < 0.35 ) {
-        gl_FragColor = vec4( texture2D( tDiffuse, vUv ).rgb, COC_OUT );
+        vec3 src = texture2D( tDiffuse, vUv ).rgb;
+        if ( any( isnan( src ) ) || any( isinf( src ) ) ) src = vec3( 0.0 );
+        gl_FragColor = vec4( src, COC_OUT );
         return;
       }
 
