@@ -16,7 +16,7 @@ import * as THREE from 'three'
 import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
 import { build, hashStr, mulberry32 } from './pieces.js'
 import { CASTLES } from '../data/castles.js'
-import { BADGE_ART, CASTLE_ART } from '../data/art.js'
+import { BADGE_ART } from '../data/art.js'
 import { artTexture } from './badgeMoment.js'
 
 const P = Math.PI
@@ -908,26 +908,6 @@ export function buildCampus(scene, { shadows = true, lite = false, merge = true 
       for (const s of slots) {
         const ry = Math.round(Math.atan2(cx - s.x, cz - s.z) / (P / 2)) * (P / 2)
         if (place(name, s.x, s.z, { district: castle.id, ry, seed: hashStr(`${castle.id}:${name}`), pad: 0.2 })) break
-      }
-    }
-    // the castle's own painting from unlimitedawesome.com, framed on a billboard beside the forecourt
-    if (CASTLE_ART[castle.id]) {
-      const tries = []
-      for (const lat of [20, -20, 24, -24, 17, -17]) for (const fwd of [fore + 4, fore - 2, fore + 9]) tries.push({ lat, fwd })
-      for (const tr of tries) {
-        const bx = pose.x + fx * tr.fwd + Math.cos(pose.ry) * tr.lat
-        const bz = pose.z + fz * tr.fwd - Math.sin(pose.ry) * tr.lat
-        const board = billboard(CASTLE_ART[castle.id], 8, 4.5, bx, bz, pose.ry, castle.accent)
-        board.updateMatrixWorld(true)
-        const box = new THREE.Box3().setFromObject(board)
-        if (boxHitsRects(box, 0.3) || boxHitsSolids(box, 0.3) || boxHitsWater(box, 0.3)) continue
-        group.add(board)
-        solids.push(box)
-        board.userData.id = castle.id
-        board.userData.tag = 'castle'
-        pickables.push(board)
-        placed.push({ name: 'billboard', built: { root: board, animated: false }, x: bx, z: bz, ry: pose.ry, box })
-        break
       }
     }
     for (const name of ['noticeboard', 'phonebooth', 'bikerack', 'parkbench', 'parkbench']) {
