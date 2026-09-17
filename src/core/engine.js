@@ -330,6 +330,31 @@ export class Engine {
 
     this.perf.sample(dt, this.renderer.info)
     if (!presenting && this.settings.get('autoQuality')) this._governQuality()
+    if (!presenting) this._checkFit()
+  }
+
+  /**
+   * Self-heal: if a resize was ever missed (a window snapped, a monitor change, a tab restored)
+   * or the browser gave the canvas a smaller drawing buffer than asked for, the scene draws into
+   * only part of the canvas and the rest reads as a black bar. Twice a second, compare and refit.
+   */
+  _checkFit() {
+    const now = performance.now()
+    if (now - (this._fitAt || 0) < 500) return
+    this._fitAt = now
+    const parent = this.canvas.parentElement
+    const vp = this.viewport
+    if (!parent || !vp) return
+    const gl = this.renderer.getContext()
+    const clamped = gl.drawingBufferWidth < this.canvas.width || gl.drawingBufferHeight < this.canvas.height
+    if (clamped) {
+      // ask for what the GPU will actually give, keeping the aspect
+      const k = Math.min(gl.drawingBufferWidth / this.canvas.width, gl.drawingBufferHeight / this.canvas.height)
+      this._governedScale = Math.max(0.3, vp.scale * k * 0.98)
+      this.resize(true)
+      return
+    }
+    if (parent.clientWidth !== vp.w || parent.clientHeight !== vp.h || this.canvas.width !== vp.bw || this.canvas.height !== vp.bh) this.resize(true)
   }
 
   /**
