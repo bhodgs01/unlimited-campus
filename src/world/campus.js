@@ -16,7 +16,7 @@ import * as THREE from 'three'
 import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
 import { build, hashStr, mulberry32 } from './pieces.js'
 import { CASTLES } from '../data/castles.js'
-import { BADGE_ART, CASTLE_ART } from '../data/art.js'
+import { BADGE_ART } from '../data/art.js'
 import { artTexture } from './badgeMoment.js'
 import { archFootbridge } from './footbridge.js'
 
@@ -999,19 +999,6 @@ export function buildCampus(scene, { shadows = true, lite = false, merge = true 
       // tall flags in the castle's colour (campus life raises and waves them)
       flagSpots.push({ x: pose.x + fx * (fore - 4) + Math.cos(pose.ry) * s * 13, z: pose.z + fz * (fore - 4) - Math.sin(pose.ry) * s * 13, accent: castle.accent })
       stamp('topiaryball', pose.x + fx * (fore - 7) + Math.cos(pose.ry) * s * 9, pose.z + fz * (fore - 7) - Math.sin(pose.ry) * s * 9, 0, 1)
-    }
-    // castle's own artwork from unlimitedawesome.com, displayed as a large ground plaque on the forecourt
-    if (CASTLE_ART[castle.id]) {
-      const artPath = CASTLE_ART[castle.id]
-      const mat = new THREE.MeshBasicMaterial({ map: artTexture(artPath), transparent: true, alphaTest: 0.05, side: THREE.DoubleSide, toneMapped: true })
-      const scale = 9
-      const plaque = new THREE.Mesh(new THREE.PlaneGeometry(scale, scale * 0.56), mat)
-      plaque.rotation.x = -Math.PI * 0.18
-      plaque.position.set(pose.x + fx * fore, Y_PAVE + 0.15, pose.z + fz * fore)
-      plaque.userData.id = castle.id
-      plaque.userData.tag = 'castle'
-      group.add(plaque)
-      pickables.push(plaque)
     }
     const rand = mulberry32(hashStr(castle.id))
     const slots = []
