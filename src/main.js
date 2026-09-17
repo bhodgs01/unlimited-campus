@@ -328,6 +328,14 @@ engine.canvas.addEventListener('pointerup', (e) => {
   const rect = engine.canvas.getBoundingClientRect()
   ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
   ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
+  // the portal is a big target people stand around: it gets first claim on the click
+  if (life.portal) {
+    caster.setFromCamera(ndc, engine.camera)
+    if (caster.intersectObjects([life.portal.vortex], false).length) {
+      beamToBrain()
+      return
+    }
+  }
   const person = people.pick(engine.camera, ndc.x, ndc.y, rect.width / rect.height)
   if (person) {
     findPerson(person.id)
