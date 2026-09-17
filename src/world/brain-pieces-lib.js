@@ -1161,6 +1161,349 @@ export default function BRAIN_PIECES(THREE, CELL) {
     B(1.1,1.6,1.1,'STONE',0,.8);B(.35,.65,.03,'BLACK',0,.35,.57);for(const x of [-.45,.45])for(const z of [-.45,.45])B(.14,.8,.14,'STONE',x,2,z);C(.14,.4,'ACCENT2',0,2.05,0,{},.3);for(const s of [-1,1])B(.85,.1,1.3,'ACCENT',s*.33,2.57,0,{rz:-s*.5});
     return {label:"Bell tower",kind:"landmark"};
   },
+  containership(c, rand) {
+    const box=(w,h,d,cell,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),cell,o)
+    const plate=(pts,d,cell,o={})=>{
+      const s=new THREE.Shape();pts.forEach(([x,y],i)=>i?s.lineTo(x,y):s.moveTo(x,y));s.closePath()
+      c.geom(new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:false}),cell,o)
+    }
+    const hull=(l,w,h,cell,o={})=>plate([[-l/2,-w*.35],[-l*.35,-w/2],[l*.30,-w/2],[l/2,0],[l*.30,w/2],[-l*.35,w/2],[-l/2,w*.35]],h,cell,{...o,rx:-Math.PI/2})
+
+  hull(3.04,.78,.25,CELL.METAL_DARK,{y:.04})
+    hull(3.08,.83,.055,CELL.ACCENT,{y:.29})
+    box(2.58,.07,.70,CELL.METAL,{y:.38})
+    for(let i=0;i<5;i++)for(let j=0;j<2;j++)for(let k=0;k<2;k++)box(.34,.23,.28,[CELL.ACCENT,CELL.ACCENT2,CELL.METAL][(i+j+k)%3],{x:-.62+i*.40,y:.535+k*.25,z:(j-.5)*.32})
+    box(.38,.54,.69,CELL.LIGHT,{x:-1.12,y:.68})
+    box(.48,.19,.78,CELL.LIGHT,{x:-1.12,y:1.02})
+    box(.33,.075,.025,CELL.GLASS,{x:-1.12,y:1.04,z:.407})
+    box(.18,.31,.24,CELL.METAL_DARK,{x:-1.30,y:1.26})
+    return {label:'Container ship',kind:'landmark'}
+  },
+  submarine(c, rand) {
+    const box=(w,h,d,cell,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),cell,o)
+    const cyl=(r,h,cell,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),cell,o)
+    const ball=(r,cell,o={})=>c.geom(new THREE.SphereGeometry(r,12,8),cell,o)
+
+  const g=new THREE.SphereGeometry(1,16,10);g.scale(1.47,.29,.31)
+    c.geom(g,CELL.METAL_DARK,{y:.33})
+    box(.45,.44,.24,CELL.METAL_DARK,{x:-.18,y:.77})
+    for(const x of [-.28,-.08]){
+      cyl(.035,.36,CELL.METAL,{x,y:1.13})
+      box(.14,.07,.07,CELL.METAL,{x:x+.045,y:1.31})
+    }
+    box(.32,.05,.91,CELL.METAL_DARK,{x:.60,y:.34})
+    box(.28,.51,.06,CELL.METAL_DARK,{x:-1.16,y:.48})
+    box(.32,.055,.63,CELL.METAL_DARK,{x:-1.15,y:.33})
+    ball(.049,CELL.RED,{x:-.18,y:1.01,z:.13})
+    return {label:'Submarine',kind:'landmark'}
+  },
+  frigate(c, rand) {
+    const box = (w, h, d, cell, o = {}) => c.geom(new THREE.BoxGeometry(w, h, d), cell, o)
+    const cyl = (r, h, cell, o = {}, n = 10) => c.geom(new THREE.CylinderGeometry(r, r, h, n), cell, o)
+    const hull = (length, beam, depth, cell, y) => {
+      const s = new THREE.Shape()
+      s.moveTo(-length / 2, -beam * 0.33)
+      s.lineTo(-length * 0.36, -beam / 2)
+      s.lineTo(length * 0.22, -beam / 2)
+      s.lineTo(length / 2, 0)
+      s.lineTo(length * 0.22, beam / 2)
+      s.lineTo(-length * 0.36, beam / 2)
+      s.lineTo(-length / 2, beam * 0.33)
+      s.closePath()
+      const g = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: false })
+      g.rotateX(-Math.PI / 2)
+      c.geom(g, cell, { y })
+    }
+    hull(2.72, 0.83, 0.21, CELL.METAL_DARK, 0)
+    hull(2.82, 0.93, 0.075, CELL.ACCENT, 0.21)
+    hull(2.82, 0.93, 0.10, CELL.METAL, 0.285)
+    box(0.73, 0.33, 0.57, CELL.METAL, { x: -0.36, y: 0.55 })
+    box(0.46, 0.25, 0.64, CELL.METAL, { x: -0.22, y: 0.84 })
+    box(0.35, 0.105, 0.035, CELL.GLOW, { x: -0.18, y: 0.86, z: 0.3375, emissive: 0.5 })
+    box(0.54, 0.075, 0.70, CELL.METAL_DARK, { x: -0.22, y: 1.0025 })
+    cyl(0.048, 0.67, CELL.METAL, { x: -0.43, y: 1.375 })
+    box(0.39, 0.11, 0.08, CELL.ACCENT, { x: -0.43, y: 1.69 })
+    box(0.24, 0.37, 0.27, CELL.METAL_DARK, { x: -0.94, y: 0.57 })
+    cyl(0.27, 0.09, CELL.METAL_DARK, { x: 0.60, y: 0.43 })
+    // Seed changes the assembled turret's bearing, never its attachment point.
+    c.group('turret', { x: 0.60, y: 0.475, ry: (rand() - 0.5) * 0.8 })
+    c.geom(new THREE.CylinderGeometry(0.18, 0.25, 0.23, 6), CELL.METAL, { y: 0.115 })
+    cyl(0.06, 0.49, CELL.METAL_DARK, { x: 0.38, y: 0.13, rz: Math.PI / 2 })
+    c.end()
+    box(0.34, 0.035, 0.39, CELL.METAL_DARK, { x: -1.08, y: 0.4025 })
+    return { label: 'Armada frigate', kind: 'landmark' }
+  },
+  patrolboat(c, rand) {
+    const box = (w, h, d, cell, o = {}) => c.geom(new THREE.BoxGeometry(w, h, d), cell, o)
+    const cyl = (r, h, cell, o = {}, n = 10) => c.geom(new THREE.CylinderGeometry(r, r, h, n), cell, o)
+    // Deliberately the smallest ship: big antenna, little hull, no face.
+    const hull = (length, beam, depth, cell, y) => {
+      const s = new THREE.Shape()
+      s.moveTo(-length / 2, -beam * 0.28)
+      s.lineTo(-length * 0.31, -beam / 2)
+      s.lineTo(length * 0.22, -beam / 2)
+      s.lineTo(length / 2, 0)
+      s.lineTo(length * 0.22, beam / 2)
+      s.lineTo(-length * 0.31, beam / 2)
+      s.lineTo(-length / 2, beam * 0.28)
+      s.closePath()
+      const g = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: false })
+      g.rotateX(-Math.PI / 2)
+      c.geom(g, cell, { y })
+    }
+    hull(1.30, 0.64, 0.18, CELL.METAL_DARK, 0)
+    hull(1.42, 0.74, 0.085, CELL.ACCENT, 0.18)
+    hull(1.42, 0.74, 0.09, CELL.METAL, 0.265)
+    box(0.47, 0.31, 0.47, CELL.METAL, { x: -0.04, y: 0.51 })
+    box(0.30, 0.12, 0.035, CELL.GLASS, { x: 0.01, y: 0.54, z: 0.2525 })
+    box(0.56, 0.09, 0.56, CELL.ACCENT, { x: -0.04, y: 0.71 })
+    cyl(0.055, 1.02, CELL.METAL, { x: -0.39, y: 0.88 })
+    box(0.48, 0.085, 0.08, CELL.METAL, { x: -0.39, y: 1.27 })
+    cyl(0.105, 0.15, CELL.GLOW, { x: -0.39, y: 1.465, emissive: 0.75 })
+    cyl(0.14, 0.065, CELL.METAL_DARK, { x: -0.39, y: 1.5725 })
+    box(0.24, 0.10, 0.28, CELL.METAL_DARK, { x: 0.40, y: 0.405 })
+    return { label: 'Armada Pi patrol boat', kind: 'landmark' }
+  },
+  flagship(c, rand) {
+    const box = (w, h, d, cell, o = {}) => c.geom(new THREE.BoxGeometry(w, h, d), cell, o)
+    const cyl = (r, h, cell, o = {}, n = 10) => c.geom(new THREE.CylinderGeometry(r, r, h, n), cell, o)
+    // Fleet convention: bow +x, bridge windows +z. No water or ground pad.
+    // ACCENT and GLOW are palette roles; node health is assigned by the engine.
+    const hull = (length, beam, depth, cell, y) => {
+      const s = new THREE.Shape()
+      s.moveTo(-length / 2, -beam * 0.38)
+      s.lineTo(-length * 0.38, -beam / 2)
+      s.lineTo(length * 0.27, -beam / 2)
+      s.lineTo(length / 2, -beam * 0.13)
+      s.lineTo(length / 2, beam * 0.13)
+      s.lineTo(length * 0.27, beam / 2)
+      s.lineTo(-length * 0.38, beam / 2)
+      s.lineTo(-length / 2, beam * 0.38)
+      s.closePath()
+      const g = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: false, steps: 1 })
+      g.rotateX(-Math.PI / 2)
+      c.geom(g, cell, { y })
+    }
+    hull(2.42, 1.0, 0.22, CELL.METAL_DARK, 0)
+    hull(2.52, 1.08, 0.08, CELL.ACCENT, 0.22)
+    hull(2.52, 1.08, 0.12, CELL.METAL, 0.30)
+    box(0.93, 0.35, 0.66, CELL.METAL, { x: -0.22, y: 0.585 })
+    box(0.72, 0.30, 0.76, CELL.METAL, { x: -0.08, y: 0.91 })
+    box(0.59, 0.13, 0.035, CELL.GLOW, { x: -0.04, y: 0.94, z: 0.397, emissive: 0.65 })
+    box(0.035, 0.13, 0.56, CELL.GLASS, { x: 0.297, y: 0.94 })
+    box(0.86, 0.09, 0.87, CELL.METAL_DARK, { x: -0.08, y: 1.105 })
+    cyl(0.065, 1.13, CELL.METAL, { x: -0.22, y: 1.715 })
+    box(0.13, 0.40, 0.13, CELL.METAL_DARK, { x: -0.22, y: 1.35 })
+    // Exactly one animated part: a broad radar paddle, centered on its mast.
+    box(0.86, 0.23, 0.09, CELL.ACCENT, { x: -0.22, y: 2.18, spin: 0.55 })
+    box(0.065, 0.45, 0.065, CELL.METAL, { x: -0.75, y: 1.36 })
+    const pennant = new THREE.Shape()
+    pennant.moveTo(0, 0)
+    pennant.lineTo(0.38, -0.11)
+    pennant.lineTo(0, -0.23)
+    pennant.closePath()
+    c.geom(new THREE.ExtrudeGeometry(pennant, { depth: 0.05, bevelEnabled: false }), CELL.ACCENT, { x: -0.75, y: 1.56, z: -0.025 })
+    cyl(0.20, 0.08, CELL.METAL_DARK, { x: 0.77, y: 0.46 })
+    cyl(0.09, 0.12, CELL.GLOW, { x: 0.77, y: 0.56, emissive: 0.5 })
+    for (const z of [-0.29, 0.29]) {
+      cyl(0.13, 0.18, CELL.METAL_DARK, { x: -1.20, y: 0.18, z, rz: Math.PI / 2 })
+    }
+    return { label: 'Armada flagship', kind: 'landmark' }
+  },
+  tanker(c, rand) {
+    const box = (w, h, d, cell, o = {}) => c.geom(new THREE.BoxGeometry(w, h, d), cell, o)
+    const cyl = (r, h, cell, o = {}, n = 12) => c.geom(new THREE.CylinderGeometry(r, r, h, n), cell, o)
+    const hull = (length, beam, depth, cell, y) => {
+      const s = new THREE.Shape()
+      s.moveTo(-length / 2, -beam * 0.36)
+      s.lineTo(-length * 0.36, -beam / 2)
+      s.lineTo(length * 0.34, -beam / 2)
+      s.lineTo(length / 2, -beam * 0.26)
+      s.lineTo(length / 2, beam * 0.26)
+      s.lineTo(length * 0.34, beam / 2)
+      s.lineTo(-length * 0.36, beam / 2)
+      s.lineTo(-length / 2, beam * 0.36)
+      s.closePath()
+      const g = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: false })
+      g.rotateX(-Math.PI / 2)
+      c.geom(g, cell, { y })
+    }
+    hull(2.85, 1.36, 0.25, CELL.METAL_DARK, 0)
+    hull(2.97, 1.46, 0.08, CELL.ACCENT, 0.25)
+    hull(2.97, 1.46, 0.12, CELL.METAL, 0.33)
+    // Three transverse pressure vessels, with bold hoops, not small fittings.
+    for (const x of [-0.52, 0.17, 0.86]) {
+      for (const z of [-0.35, 0.35]) box(0.41, 0.16, 0.14, CELL.METAL_DARK, { x, y: 0.53, z })
+      cyl(0.29, 1.08, CELL.METAL, { x, y: 0.84, rx: Math.PI / 2 })
+      for (const z of [-0.36, 0.36]) cyl(0.306, 0.075, CELL.METAL_DARK, { x, y: 0.84, z, rx: Math.PI / 2 })
+    }
+    box(2.03, 0.07, 0.18, CELL.METAL_DARK, { x: 0.17, y: 1.155 })
+    box(0.44, 0.43, 0.69, CELL.METAL, { x: -1.08, y: 0.665 })
+    box(0.33, 0.14, 0.04, CELL.GLASS, { x: -1.08, y: 0.755, z: 0.365 })
+    box(0.50, 0.08, 0.77, CELL.METAL_DARK, { x: -1.08, y: 0.92 })
+    cyl(0.045, 0.36, CELL.METAL, { x: -1.08, y: 1.14 })
+    cyl(0.085, 0.12, CELL.GLOW, { x: -1.08, y: 1.38, emissive: 0.65 })
+    return { label: 'Armada storage tanker', kind: 'landmark' }
+  },
+  corvette(c, rand) {
+    const box = (w, h, d, cell, o = {}) => c.geom(new THREE.BoxGeometry(w, h, d), cell, o)
+    const cyl = (r, h, cell, o = {}, n = 10) => c.geom(new THREE.CylinderGeometry(r, r, h, n), cell, o)
+    // Smaller than the frigate; the class brief takes precedence over the
+    // generic 2.5-unit minimum. Do not independently normalize fleet hulls.
+    const hull = (length, beam, depth, cell, y) => {
+      const s = new THREE.Shape()
+      s.moveTo(-length / 2, -beam * 0.34)
+      s.lineTo(-length * 0.34, -beam / 2)
+      s.lineTo(length * 0.20, -beam / 2)
+      s.lineTo(length / 2, 0)
+      s.lineTo(length * 0.20, beam / 2)
+      s.lineTo(-length * 0.34, beam / 2)
+      s.lineTo(-length / 2, beam * 0.34)
+      s.closePath()
+      const g = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: false })
+      g.rotateX(-Math.PI / 2)
+      c.geom(g, cell, { y })
+    }
+    hull(2.06, 0.79, 0.18, CELL.METAL_DARK, 0)
+    hull(2.16, 0.87, 0.07, CELL.ACCENT, 0.18)
+    hull(2.16, 0.87, 0.10, CELL.METAL, 0.25)
+    const variant = Math.floor(rand() * 3)
+    c.group('cabin', { x: -0.16, y: 0.35 })
+    if (variant === 0) {
+      box(0.69, 0.38, 0.55, CELL.METAL, { y: 0.19 })
+      box(0.77, 0.08, 0.62, CELL.METAL_DARK, { y: 0.42 })
+    } else if (variant === 1) {
+      c.geom(new THREE.CylinderGeometry(0.31, 0.40, 0.40, 4), CELL.METAL, { y: 0.20, ry: Math.PI / 4 })
+      box(0.47, 0.08, 0.47, CELL.METAL_DARK, { y: 0.44 })
+    } else {
+      box(0.85, 0.22, 0.56, CELL.METAL, { y: 0.11 })
+      box(0.43, 0.22, 0.48, CELL.METAL, { x: -0.15, y: 0.33 })
+      box(0.50, 0.07, 0.54, CELL.METAL_DARK, { x: -0.15, y: 0.475 })
+    }
+    c.end()
+    // Porthole is on a shared bow coaming so it fits all three cabin shapes.
+    box(0.28, 0.25, 0.38, CELL.METAL, { x: 0.49, y: 0.475 })
+    cyl(0.105, 0.045, CELL.METAL_DARK, { x: 0.49, y: 0.48, z: 0.2075, rx: Math.PI / 2 })
+    cyl(0.072, 0.022, CELL.GLOW, { x: 0.49, y: 0.48, z: 0.239, rx: Math.PI / 2, emissive: 0.65 })
+    cyl(0.044, 0.74, CELL.METAL, { x: -0.42, y: 1.04 })
+    box(0.27, 0.11, 0.07, CELL.ACCENT, { x: -0.42, y: 1.405 })
+    box(0.23, 0.12, 0.28, CELL.METAL_DARK, { x: -0.91, y: 0.41 })
+    return { label: 'Armada corvette', kind: 'landmark' }
+  },
+  carrier(c, rand) {
+    const box = (w, h, d, cell, o = {}) => c.geom(new THREE.BoxGeometry(w, h, d), cell, o)
+    const hull = (length, beam, depth, cell, y) => {
+      const s = new THREE.Shape()
+      s.moveTo(-length / 2, -beam * 0.39)
+      s.lineTo(-length * 0.42, -beam / 2)
+      s.lineTo(length * 0.40, -beam / 2)
+      s.lineTo(length / 2, -beam * 0.34)
+      s.lineTo(length / 2, beam * 0.34)
+      s.lineTo(length * 0.40, beam / 2)
+      s.lineTo(-length * 0.42, beam / 2)
+      s.lineTo(-length / 2, beam * 0.39)
+      s.closePath()
+      const g = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: false, steps: 1 })
+      g.rotateX(-Math.PI / 2)
+      c.geom(g, cell, { y })
+    }
+    hull(2.86, 1.13, 0.24, CELL.METAL_DARK, 0)
+    hull(2.96, 1.24, 0.075, CELL.ACCENT, 0.24)
+    hull(3.12, 1.46, 0.13, CELL.METAL, 0.315)
+    // Rear-side island leaves the working deck readable from +z.
+    box(0.81, 0.40, 0.33, CELL.METAL, { x: -0.47, y: 0.645, z: -0.48 })
+    box(0.64, 0.20, 0.41, CELL.METAL_DARK, { x: -0.35, y: 0.945, z: -0.48 })
+    box(0.49, 0.085, 0.035, CELL.GLASS, { x: -0.29, y: 0.965, z: -0.257 })
+    box(0.07, 0.41, 0.07, CELL.METAL, { x: -0.51, y: 1.25, z: -0.48 })
+    box(0.38, 0.10, 0.08, CELL.ACCENT, { x: -0.51, y: 1.455, z: -0.48 })
+    // Four GPU slots, two emissive geometry objects: each joins two separated boxes.
+    // A class-only API cannot identify the one-GPU node; the default is four slots.
+    for (const x of [-0.96, -0.34, 0.28, 0.90]) {
+      box(0.45, 0.065, 0.57, CELL.METAL_DARK, { x, y: 0.4775, z: 0.15 })
+    }
+    for (const centers of [[-0.96, -0.34], [0.28, 0.90]]) {
+      const first = new THREE.Shape()
+      const second = new THREE.Shape()
+      for (const [shape, x] of [[first, centers[0]], [second, centers[1]]]) {
+        shape.moveTo(x - 0.15, -0.36)
+        shape.lineTo(x + 0.15, -0.36)
+        shape.lineTo(x + 0.15, 0.06)
+        shape.lineTo(x - 0.15, 0.06)
+        shape.closePath()
+      }
+      const g = new THREE.ExtrudeGeometry([first, second], { depth: 0.025, bevelEnabled: false })
+      g.rotateX(-Math.PI / 2)
+      c.geom(g, CELL.GLOW, { y: 0.510, emissive: 0.7 })
+    }
+    box(2.45, 0.025, 0.055, CELL.ACCENT, { y: 0.4575, z: 0.57 })
+    for (const z of [-0.34, 0.34]) {
+      box(0.16, 0.15, 0.26, CELL.METAL_DARK, { x: -1.45, y: 0.14, z })
+    }
+    return { label: 'Armada GPU carrier', kind: 'landmark' }
+  },
+  tender(c, rand) {
+    const box = (w, h, d, cell, o = {}) => c.geom(new THREE.BoxGeometry(w, h, d), cell, o)
+    const cyl = (r, h, cell, o = {}, n = 10) => c.geom(new THREE.CylinderGeometry(r, r, h, n), cell, o)
+    // Standby uses metal and unlit glass; no ACCENT or GLOW until the host
+    // explicitly changes its state. Gray is a role choice, not a hardcoded color.
+    const hull = (length, beam, depth, cell, y) => {
+      const s = new THREE.Shape()
+      s.moveTo(-length / 2, -beam * 0.24)
+      s.lineTo(-length * 0.31, -beam / 2)
+      s.lineTo(length * 0.24, -beam / 2)
+      s.lineTo(length / 2, 0)
+      s.lineTo(length * 0.24, beam / 2)
+      s.lineTo(-length * 0.31, beam / 2)
+      s.lineTo(-length / 2, beam * 0.24)
+      s.closePath()
+      const g = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: false })
+      g.rotateX(-Math.PI / 2)
+      c.geom(g, cell, { y })
+    }
+    // Smaller than the corvette, larger than the Pi patrol boat.
+    hull(1.68, 0.81, 0.18, CELL.METAL_DARK, 0)
+    hull(1.78, 0.90, 0.07, CELL.METAL, 0.18)
+    hull(1.78, 0.90, 0.10, CELL.METAL_DARK, 0.25)
+    box(0.47, 0.29, 0.55, CELL.METAL, { x: -0.43, y: 0.495 })
+    box(0.33, 0.12, 0.035, CELL.GLASS, { x: -0.43, y: 0.53, z: 0.2925 })
+    box(0.56, 0.075, 0.63, CELL.METAL_DARK, { x: -0.43, y: 0.6775 })
+    // Closed solar leaves, like a shut laptop: a visible hinge and stacked rims.
+    for (const y of [0.405, 0.50]) {
+      box(0.66, 0.065, 0.63, CELL.METAL, { x: 0.23, y })
+    }
+    box(0.52, 0.025, 0.49, CELL.GLASS, { x: 0.23, y: 0.545 })
+    cyl(0.055, 0.65, CELL.METAL_DARK, { x: -0.08, y: 0.455, rx: Math.PI / 2 })
+    cyl(0.04, 0.45, CELL.METAL, { x: -0.56, y: 0.94 })
+    cyl(0.075, 0.11, CELL.GLASS, { x: -0.56, y: 1.22 })
+    return { label: 'Armada standby tender', kind: 'landmark' }
+  },
+  campusship(c, rand) {
+    const B=(w,h,d,k,x=0,y=0,z=0,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),CELL[k],{x,y,z,...o});
+    const C=(r,h,k,x=0,y=0,z=0,o={},r2=r)=>{const g=new THREE.CylinderGeometry(r,r2,h,12);if(o.spin){g.applyQuaternion(new THREE.Quaternion().setFromEuler(new THREE.Euler(o.rx||0,o.ry||0,o.rz||0)));return c.geom(g,CELL[k],{x,y,z,...o,rx:0,ry:0,rz:0});}return c.geom(g,CELL[k],{x,y,z,...o});};
+    const S=(a,b,d,k,x=0,y=0,z=0,o={})=>{const g=new THREE.SphereGeometry(1,12,8);g.scale(a,b,d);return c.geom(g,CELL[k],{x,y,z,...o});};
+    const L=(a,b,r,k,o={})=>{const u=new THREE.Vector3(...a),v=new THREE.Vector3(...b),d=v.clone().sub(u);const g=new THREE.CylinderGeometry(r,r,d.length(),8);g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize()));const m=u.add(v).multiplyScalar(.5);return c.geom(g,CELL[k],{x:m.x,y:m.y,z:m.z,...o});};
+    const G=(n,x=0,y=0,z=0,o={})=>c.group(n,{x,y,z,...o}), E=()=>c.end();
+    C(.95,.65,'METAL',0,1.3,0,{label:'Capsule hull'},1.25);S(.95,.45,.95,'ACCENT',0,1.63,0,{label:'Nose cap'});C(1.1,.18,'METAL_DARK',0,.92,0,{label:'Belly skirt'},1.3);
+  for(const x of [-1,1])for(const z of [-1,1]){L([x*.75,1.05,z*.75],[x*1.4,.2,z*1.4],.08,'METAL');C(.27,.16,'METAL_DARK',x*1.4,.08,z*1.4,{label:x>0&&z>0?'Landing foot':undefined});}
+  for(let i=0;i<5;i++){const a=.65+i*1.24;const x=1.095*Math.sin(a),z=1.095*Math.cos(a);const pane=new THREE.CylinderGeometry(.14,.14,.055,12);pane.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),new THREE.Vector3(Math.sin(a),0,Math.cos(a))));c.geom(pane,CELL.GLASS,{x,y:1.4,z,label:i===0?'Portholes':undefined});}
+  C(.04,.6,'METAL',-.5,2,-.25,{label:'Sensor mast'});S(.07,.07,.07,'GLOW',-.5,2.34,-.25,{emissive:.8});B(.62,.72,.04,'GLOW',0,1.15,1.08,{emissive:.35,label:'Lit hatch'});B(.5,.63,.045,'BLACK',0,1.16,1.12);
+  G('ramp',0,.8,1.1,{rx:-Math.PI/2});B(.7,.09,1.5,'METAL',0,0,.75,{label:'Boarding ramp'});for(let i=0;i<6;i++)B(.65,.025,.025,'METAL_DARK',0,.06,.2+i*.2);E();
+    return {label:"Campus lander",kind:"hero",pose(t,parts){parts.ramp.rotation.x=-Math.PI/2+(Math.PI/2+Math.asin(.74/1.5))*t}};
+  },
+  dinghy(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=12)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const rod=(a,b,r,k,o={})=>{const u=new THREE.Vector3(...a),v=new THREE.Vector3(...b),d=v.clone().sub(u);const q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.clone().normalize());const g=new THREE.CylinderGeometry(r,r,d.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(q));const p=u.add(v).multiplyScalar(.5);c.geom(g,k,{x:p.x,y:p.y,z:p.z,...o});};
+    const T=(pts,r,k,o={})=>c.geom(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(p=>new THREE.Vector3(...p))),Math.min(192,Math.max(24,pts.length*2)),r,6,false),k,o);
+    c.group('hull',{y:.26});
+    const plan=[[-.48,-1.08],[-.62,-.36],[-.53,.66],[-.28,1.06],[0,1.27],[.28,1.06],[.53,.66],[.62,-.36],[.48,-1.08]];
+    const s=new THREE.Shape();plan.forEach(([x,z],i)=>i?s.lineTo(x,-z):s.moveTo(x,-z));s.closePath();const floor=new THREE.ExtrudeGeometry(s,{depth:.06,bevelEnabled:false});floor.rotateX(-Math.PI/2);c.geom(floor,CELL.WOOD,{label:'Hull floor'});
+    for(let row=0;row<3;row++){const sc=.84+row*.08;for(let i=0;i<plan.length;i++){const a=plan[i],b=plan[(i+1)%plan.length],dx=(b[0]-a[0])*sc,dz=(b[1]-a[1])*sc;B(Math.hypot(dx,dz)+.015,.115,.053,CELL.WOOD,{x:(a[0]+b[0])*.5*sc,y:.07+row*.105,z:(a[1]+b[1])*.5*sc,ry:-Math.atan2(dz,dx),label:i===0?['Lower strake','Middle strake','Gunwale strake'][row]:undefined});}}
+    for(const z of [-.45,.37])B(1.02,.06,.19,CELL.WOOD,{y:.28,z,label:z<0?'Thwarts':undefined});
+    for(const x of [-.25,.25]){rod([x,.36,-.79],[x,.36,.76],.023,CELL.WOOD,{label:x<0?'Shipped oars':undefined});B(.13,.042,.30,CELL.WOOD,{x,y:.36,z:.84});}c.end();
+    C(.12,.54,CELL.WOOD,{x:1.17,y:.27,z:.18,label:'Mooring bollard'});T([[1.17,.45,.18],[.89,.31,.49],[.48,.49,.84],[0,.54,1.15]],.021,CELL.CLOTH,{label:'Painter line'});
+    return {label:'Clinker-built dinghy',kind:'hero',loop:5,pose(t,p){p.hull.rotation.z=.065*Math.sin(2*Math.PI*t);p.hull.rotation.x=.025*Math.cos(2*Math.PI*t);}};
+  },
   // END BRAIN PIECES
   }
 }

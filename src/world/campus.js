@@ -863,17 +863,7 @@ export function buildCampus(scene, { shadows = true } = {}) {
     placeAny('ferryterminal', [{ x: 0, z: rimS - 10 }, { x: 0, z: rimS - 13 }], { district: 'grounds' })
     landmarks.push({ id: 'harbour', name: 'The Harbour', x: 0, y: 5, z: rimS - 10, kind: 'place' })
     const atSea = { solid: false, obstacle: false, y: SEA_Y }
-    place('tallship', -28, rimS + 34, { ...atSea, district: 'brain', ry: 0.25, scale: 1.7 * 3.2 })
-    place('longship', 46, rimS + 52, { ...atSea, district: 'brain', ry: -0.5, scale: 1.7 * 1.8 })
-    place('fishingboat', 24, rimS + 22, { ...atSea, district: 'brain', ry: 1.2, scale: 1.7 * 1.8 })
-    place('sailboat', -60, rimS + 26, { ...atSea, ry: 2.4, scale: 1.7 * 2 })
     for (let i = 0; i < 6; i++) place('buoy', -14 + i * 6, rimS + 12 + (i % 2) * 3, { ...atSea, district: 'brain' })
-    const along = Math.atan2(-RTZ, RTX)
-    for (const [f, off] of [[0.3, -2.5], [0.55, 2.5], [0.78, -1.5]]) {
-      const s = RIVER.sMin + (RIVER.sMax - RIVER.sMin) * f
-      const p = riverPoint(s, off)
-      place('canoe', p.x, p.z, { district: 'brain', ry: along, y: Y_WATER, solid: false, obstacle: false })
-    }
     // footbridges well away from the road crossings: the two points on the river farthest from any
     const crossS = roadGaps.map((g) => riverS(g.x, g.z))
     const farthest = (lo, hi) => {
@@ -897,6 +887,236 @@ export function buildCampus(scene, { shadows = true } = {}) {
       for (const side of [-1, 1]) spots.grounds.push(riverPoint(s, side * (RIVER.shore + 5)))
     }
     landmarks.push({ id: 'river', name: 'The River', ...riverPoint(RIVER.sMin + (RIVER.sMax - RIVER.sMin) * 0.4), y: 3, kind: 'place' })
+  }
+
+  // ── traffic: ships circling the island, boats up the river and back round the Point ──────
+  // The river sits 6 m above the sea, so each river mouth has a canal lock: boats sail into the
+  // chamber, the water carries them down (or up), and the far gate opens.
+  {
+    const TX = RTX
+    const TZ = RTZ
+    const LOCK = { a0: 1, len: 18, width: 11, top: Y_WATER, bottom: SEA_Y }
+    const stoneMat = new THREE.MeshStandardMaterial({ color: 0xb9b1a3, roughness: 0.9 })
+    const gateMat = new THREE.MeshStandardMaterial({ color: 0x7d4f28, roughness: 0.8 })
+    const lockWaterMat = new THREE.MeshStandardMaterial({ color: WATER, roughness: 0.55, emissive: new THREE.Color(0x0e3a63), transparent: true, opacity: 0.92 })
+    const lampMat = new THREE.MeshBasicMaterial({ color: 0xffd27a })
+    const makeLock = (name, mouth, outX, outZ) => {
+      const g = new THREE.Group()
+      g.name = `lock-${name}`
+      const ry = Math.atan2(-outZ, outX)
+      const at = (a, lateral = 0, y = 0) => new THREE.Vector3(mouth.x + outX * a - outZ * lateral, y, mouth.z + outZ * a + outX * lateral)
+      const ac = LOCK.a0 + LOCK.len / 2
+      for (const side of [-1, 1]) {
+        const wall = new THREE.Mesh(new THREE.BoxGeometry(LOCK.len + 3, 7.2, 1.4), stoneMat)
+        wall.position.copy(at(ac, side * (LOCK.width / 2 + 0.7), -3.0))
+        wall.rotation.y = ry
+        wall.castShadow = true
+        wall.receiveShadow = true
+        g.add(wall)
+        for (const a of [LOCK.a0, LOCK.a0 + LOCK.len]) {
+          const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 6), lampMat)
+          lamp.position.copy(at(a, side * (LOCK.width / 2 + 0.7), 1.5))
+          g.add(lamp)
+        }
+      }
+      const water = new THREE.Mesh(new THREE.PlaneGeometry(LOCK.len + 1, LOCK.width), lockWaterMat)
+      water.rotation.set(-P / 2, 0, 0)
+      water.rotation.order = 'YXZ'
+      water.rotation.y = ry
+      water.position.copy(at(ac, 0, LOCK.top))
+      g.add(water)
+      const gates = {}
+      for (const [key, a, bottomY] of [['inner', LOCK.a0, SEA_Y - 0.6], ['outer', LOCK.a0 + LOCK.len, SEA_Y - 0.6]]) {
+        const gate = new THREE.Mesh(new THREE.BoxGeometry(0.6, 6.8, LOCK.width), gateMat)
+        gate.position.copy(at(a, 0, -3.0))
+        gate.rotation.y = ry
+        gate.castShadow = true
+        gate.userData.closedY = -3.0
+        gate.userData.openY = -3.0 - 7.2
+        g.add(gate)
+        gates[key] = gate
+      }
+      group.add(g)
+      return { name, mouth, outX, outZ, at, ac, water, gates, level: LOCK.top, wantInner: false, wantOuter: false }
+    }
+    const southMouth = riverPoint(RIVER.sMin)
+    const eastMouth = riverPoint(RIVER.sMax)
+    const lockS = makeLock('south', southMouth, -TX, -TZ)
+    const lockE = makeLock('east', eastMouth, TX, TZ)
+    landmarks.push({ id: 'lock-e', name: 'East Lock', x: eastMouth.x + TX * 10, y: 4, z: eastMouth.z + TZ * 10, kind: 'place' })
+
+    // a route is a list of legs; each leg knows its duration and where a boat is at time u
+    const pathLeg = (pts, speed, y) => {
+      const cum = [0]
+      for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z))
+      const len = cum[cum.length - 1]
+      return {
+        dur: len / speed,
+        at(u, out) {
+          const d = Math.min(len, u * speed)
+          let i = 1
+          while (i < cum.length - 1 && cum[i] < d) i++
+          const a = pts[i - 1]
+          const b = pts[i]
+          const seg = cum[i] - cum[i - 1] || 1
+          const k = (d - cum[i - 1]) / seg
+          out.x = a.x + (b.x - a.x) * k
+          out.z = a.z + (b.z - a.z) * k
+          out.y = y
+          out.dx = b.x - a.x
+          out.dz = b.z - a.z
+          return out
+        },
+      }
+    }
+    const GLIDE = 6
+    const LIFT = 7
+    const lockLeg = (lock, down) => {
+      const inner = lock.at(LOCK.a0 + 1)
+      const mid = lock.at(lock.ac)
+      const outer = lock.at(LOCK.a0 + LOCK.len - 1 + 6)
+      const [from, to] = down ? [inner, outer] : [outer, inner]
+      const [yFrom, yTo] = down ? [LOCK.top, LOCK.bottom] : [LOCK.bottom, LOCK.top]
+      return {
+        dur: GLIDE * 2 + LIFT,
+        at(u, out) {
+          const dx = to.x - from.x
+          const dz = to.z - from.z
+          out.dx = dx
+          out.dz = dz
+          if (u < GLIDE) {
+            const k = u / GLIDE
+            out.x = from.x + (mid.x - from.x) * k
+            out.z = from.z + (mid.z - from.z) * k
+            out.y = yFrom
+            if (down) lock.wantInner = true
+            else lock.wantOuter = true
+            lock.target = yFrom
+          } else if (u < GLIDE + LIFT) {
+            const k = (u - GLIDE) / LIFT
+            const e = k * k * (3 - 2 * k)
+            out.x = mid.x
+            out.z = mid.z
+            out.y = yFrom + (yTo - yFrom) * e
+            lock.target = out.y
+          } else {
+            const k = (u - GLIDE - LIFT) / GLIDE
+            out.x = mid.x + (to.x - mid.x) * k
+            out.z = mid.z + (to.z - mid.z) * k
+            out.y = yTo
+            if (down) lock.wantOuter = true
+            else lock.wantInner = true
+            lock.target = yTo
+          }
+          return out
+        },
+      }
+    }
+    const route = (legs) => {
+      const total = legs.reduce((n, l) => n + l.dur, 0)
+      return {
+        total,
+        at(t, out) {
+          let u = ((t % total) + total) % total
+          for (const l of legs) {
+            if (u <= l.dur) return l.at(u, out)
+            u -= l.dur
+          }
+          return legs[legs.length - 1].at(legs[legs.length - 1].dur, out)
+        },
+      }
+    }
+    const angleOf = (p) => Math.atan2(p.z / ISLAND.rz, p.x / ISLAND.rx)
+
+    // the river loop: up the river (south to east), down the east lock, round the Point, up the south lock
+    const upriver = []
+    upriver.push(lockS.at(LOCK.a0 + 1))
+    for (let s2 = RIVER.sMin; s2 <= RIVER.sMax; s2 += 4) upriver.push(riverPoint(s2, -2.8))
+    upriver.push(lockE.at(LOCK.a0 + 1))
+    const tE = angleOf(eastMouth)
+    const tS = angleOf(southMouth)
+    const around = [lockE.at(LOCK.a0 + LOCK.len + 5)]
+    const t0 = tE + 0.05
+    const t1 = tS - 0.05
+    for (let k = 0; k <= 40; k++) around.push(rimPoint(t0 + ((t1 - t0) * k) / 40, -28))
+    around.push(lockS.at(LOCK.a0 + LOCK.len + 5))
+    const riverLoop = route([pathLeg(upriver, 3.2, Y_WATER + 0.02), lockLeg(lockE, true), pathLeg(around, 5, SEA_Y), lockLeg(lockS, false)])
+
+    const vessels = []
+    const vessel = (name, district, scale, r, offset, extra = {}) => {
+      const b = build(name, { district, seed: hashStr(`${name}${offset}`), shadows, scale })
+      if (!b) return
+      const size = b.box.getSize(new THREE.Vector3())
+      b.root.userData.alongZ = size.z > size.x
+      b.root.userData.piece = name
+      group.add(b.root)
+      if (b.animated) animated.push(b)
+      vessels.push({ b, r, offset, phase: offset * 1.7, ...extra })
+    }
+    // river traffic: small, low boats that clear the bridges
+    const RIVER_BOATS = [['canoe', 'brain', 1.7 * 1.1], ['rowboat', 'grounds', 1.7 * 1.5], ['dinghy', 'brain', 1.7 * 0.9], ['canoe', 'brain', 1.7 * 1.1], ['tender', 'brain', 1.7 * 0.8]]
+    RIVER_BOATS.forEach(([name, district, scale], i) => vessel(name, district, scale, riverLoop, (riverLoop.total / RIVER_BOATS.length) * i))
+    // the sea lanes: each ship on its own ring round the island, some clockwise
+    const SEA_SHIPS = [
+      ['tallship', 'brain', 3.2, 46, 4.2, 1],
+      ['containership', 'brain', 4.2, 62, 5.5, -1],
+      ['longship', 'brain', 1.9, 38, 3.4, -1],
+      ['frigate', 'brain', 3.4, 78, 6.5, 1],
+      ['tanker', 'brain', 4.0, 96, 4.8, 1],
+      ['carrier', 'brain', 4.4, 118, 5.2, -1],
+      ['flagship', 'brain', 3.6, 86, 4.0, -1],
+      ['fishingboat', 'brain', 2.2, 52, 3.0, 1],
+      ['patrolboat', 'brain', 2.4, 70, 7.5, -1],
+      ['corvette', 'brain', 3.0, 104, 6.0, 1],
+      ['submarine', 'brain', 3.2, 132, 3.6, 1],
+      ['sailboat', 'grounds', 2.4, 42, 3.8, -1],
+      ['sailboat', 'grounds', 2.4, 58, 3.3, 1],
+      ['tallship', 'brain', 3.0, 126, 4.4, -1],
+    ]
+    SEA_SHIPS.forEach(([name, district, scale, dist, speed, dir], i) => {
+      const pts = []
+      for (let k = 0; k <= 160; k++) pts.push(rimPoint((dir * k * P * 2) / 160, -dist))
+      const ring = route([pathLeg(pts, speed, SEA_Y)])
+      vessel(name, district, 1.7 * scale, ring, ((i * 0.618) % 1) * ring.total, { roll: 0.035 })
+    })
+
+    const pos = { x: 0, y: 0, z: 0, dx: 1, dz: 0 }
+    const traffic = { clock: 0, vessels, riverLoop }
+    group.userData.traffic = traffic
+    animated.push({
+      tick(dt) {
+        traffic.clock += dt
+        const clock = traffic.clock
+        for (const L of [lockS, lockE]) {
+          L.wantInner = false
+          L.wantOuter = false
+          L.target = null
+        }
+        for (const v of vessels) {
+          v.r.at(clock + v.offset, pos)
+          const root = v.b.root
+          const bob = Math.sin(clock * 1.2 + v.phase) * 0.12
+          root.position.set(pos.x, pos.y + bob, pos.z)
+          const len = Math.hypot(pos.dx, pos.dz)
+          if (len > 1e-4) {
+            const want = root.userData.alongZ ? Math.atan2(pos.dx, pos.dz) : Math.atan2(-pos.dz, pos.dx)
+            let diff = want - root.rotation.y
+            diff = Math.atan2(Math.sin(diff), Math.cos(diff))
+            root.rotation.y += diff * Math.min(1, dt * 2.5)
+          }
+          root.rotation.z = Math.sin(clock * 0.9 + v.phase) * (v.roll || 0.02)
+        }
+        for (const L of [lockS, lockE]) {
+          if (L.target != null) L.level += (L.target - L.level) * Math.min(1, dt * 4)
+          L.water.position.y = L.level
+          for (const [key, want] of [['inner', L.wantInner], ['outer', L.wantOuter]]) {
+            const gate = L.gates[key]
+            const y = want ? gate.userData.openY : gate.userData.closedY
+            gate.position.y += (y - gate.position.y) * Math.min(1, dt * 2.2)
+          }
+        }
+      },
+    })
   }
 
   // ── planting, last: every tree and bush is checked against everything above ─────────
