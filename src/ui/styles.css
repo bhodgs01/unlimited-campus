@@ -12,7 +12,8 @@
   --text: #f2f0ec;
   --muted: #9b9aa3;
   --dim: #6f6e78;
-  --accent: #c96442;
+  --accent: #e501ff;
+  --accent-2: #afff00;
   --green: #4f9a63;
   --blue: #4f7ec9;
   --amber: #c9a24f;
@@ -38,7 +39,7 @@ body,
 }
 
 body {
-  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Open Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color: var(--text);
   -webkit-font-smoothing: antialiased;
   user-select: none;

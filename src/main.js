@@ -9,6 +9,7 @@ import { Navigation } from './agents/navigation.js'
 import { crewRig, loadCrew } from './agents/crew.js'
 import { buildCampus, DISTRICTS } from './world/campus.js'
 import { setNight } from './world/pieces.js'
+import { buildMark } from './world/mark.js'
 import { CASTLES, castleById, MENTORS, BRAND } from './data/castles.js'
 import { Hud } from './ui/hud.js'
 import { installVr } from './vr.js'
@@ -28,7 +29,7 @@ app.insertAdjacentHTML(
   'beforeend',
   `<div class="boot"><div class="inner">
      <h1>Unlimited Campus</h1>
-     <p>Raising the six castles…</p>
+     <p>The Human Operating System for the Intelligence Age</p>
      <div class="bar"><i></i></div>
    </div></div>`
 )
@@ -114,6 +115,25 @@ for (let i = 0; i < 12; i++) {
     atPost: true,
   })
 }
+// the four Awesomenauts, the named guides from the UA brand system
+const GUIDES = [
+  { id: 'nova', name: 'Nova', role: 'The Explorer', traits: 'Curious, adventurous, fearless.', does: 'Opens the question and introduces new ideas.', at: [-12, 60] },
+  { id: 'atlas', name: 'Atlas', role: 'The Builder', traits: 'Logical, inventive, strategic.', does: 'Explains systems, mechanisms and frameworks.', at: [14, -40] },
+  { id: 'luna', name: 'Luna', role: 'The Empath', traits: 'Kind, wise, thoughtful.', does: 'Leads the reflection moments.', at: [-26, 30] },
+  { id: 'orion', name: 'Orion', role: 'The Leader', traits: 'Confident, determined, inspiring.', does: 'Sets the challenge and sends you off.', at: [6, 104] },
+]
+for (const g of GUIDES) {
+  roster.push({
+    id: `guide-${g.id}`,
+    kind: 'guide',
+    guide: g,
+    thread: { title: `${g.name}, ${g.role}`, intro: `${g.traits} ${g.does}` },
+    status: 'working',
+    site: new THREE.Vector3(g.at[0], 0, g.at[1]),
+    anchor: new THREE.Vector3(g.at[0], 0, g.at[1]),
+    atPost: true,
+  })
+}
 roster.push({
   id: 'tutor',
   kind: 'tutor',
@@ -189,7 +209,7 @@ function cardFor(hit) {
     const entry = roster.find((r) => r.id === a.id)
     const c = entry?.castle ? castleById(entry.castle) : null
     return {
-      kicker: entry?.kind === 'mentor' ? 'Mentor' : entry?.kind === 'tutor' ? 'AI Tutor' : 'Student',
+      kicker: entry?.kind === 'guide' ? 'Awesomenaut guide' : entry?.kind === 'mentor' ? 'Mentor' : entry?.kind === 'tutor' ? 'AI Tutor' : 'Awesomenaut',
       title: entry?.thread.title || 'Someone',
       text: entry?.thread.intro || '',
       accent: c?.accent || (entry?.kind === 'mentor' ? BRAND.lime : BRAND.purple),
@@ -234,7 +254,7 @@ function cardFor(hit) {
     mentors: ['Hall of Mentors', '190+ world-class mentors: founders, CEOs, directors, scientists.'],
     library: ['The Library', '350+ modules and 1,500+ media assets.'],
     observatory: ['The Observatory', 'Space, and everything you can see from here.'],
-    gate: ['Welcome Gate', 'Learning for the Intelligence Age.'],
+    gate: ['Welcome Gate', 'The Human Operating System for the Intelligence Age. The Universe is conspiring to help me.'],
     schools: ['The Schools', 'Eight worlds already built in the JARVIS Brain, standing on the north shore.'],
   }
   const info = INFO[hit.tag]
@@ -364,6 +384,11 @@ const labels = (() => {
   return { update, toggle: (on) => { visible = on ?? !visible } }
 })()
 
+// ── the UA Mark: a white isometric cube over the plaza, turning slowly on its vertical axis ──
+const mark = buildMark({ size: 5.5 })
+mark.position.set(0, 19, 0)
+engine.scene.add(mark)
+
 // ── Blake and Alan: real faces, find-me chips like the Bot Farm ──────────────────────────
 const peopleSpots = [...campus.spots.plaza, ...campus.spots.grounds.slice(0, 80)]
 const people = new People(engine.scene, nav, peopleSpots)
@@ -463,6 +488,7 @@ engine.add({
     if (engine.bloomPass) engine.bloomPass.strength = bloomWanted
     if (!vr.active) labels.update()
     campus.tick(dt)
+    mark.userData.tick(dt)
     people.update(dt, elapsed)
     if (astronauts.group.visible) {
       astronauts.update(dt, elapsed)

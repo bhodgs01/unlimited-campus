@@ -26,7 +26,10 @@ import { attachMatrixAt, decorateSkinned, frameFor } from './crew.js'
  * size these characters render.
  */
 
-const SUIT_TONES = [0xf3f1ec, 0xe8e4dc, 0xf7f4ee, 0xdfe4e8, 0xf1e9df]
+// Awesomenauts (UA brand): black suits with gold accents and dark red velvet details
+const SUIT_TONES = [0x1b1b20, 0x202026, 0x17171b, 0x24232a, 0x1e1d23]
+const AWESOME_GOLD = new THREE.Color(0xc9a24a)
+const AWESOME_VELVET = new THREE.Color(0x7a1f2b)
 
 /** Trim + eye colour per behaviour. Eyes are pushed past 1.0 so the bloom pass catches them. */
 const AGENT_LOOK = {
@@ -243,8 +246,8 @@ export class Astronauts {
     this._applyShadowFlags()
 
     // Ground rings for hover + selection. Two ordinary meshes, moved around as needed.
-    this.hoverRing = ring(0.42, 0.5, 0x9fd8ff, 0.5)
-    this.selectRing = ring(0.5, 0.62, 0xffd28a, 0.9)
+    this.hoverRing = ring(0.42, 0.5, 0xafff00, 0.6)
+    this.selectRing = ring(0.5, 0.62, 0xe501ff, 0.9)
     this.hoverRing.visible = false
     this.selectRing.visible = false
     this.group.add(this.hoverRing, this.selectRing)
@@ -1260,8 +1263,8 @@ export class Astronauts {
       if (agent.index !== i || agent.colorDirty) {
         agent.colorDirty = false
         crew?.setColorAt(i, c.setHex(agent.suit))
-        helmet.setColorAt(i, c.setHex(agent.suit))
-        pack.setColorAt(i, agent.trim)
+        helmet.setColorAt(i, AWESOME_GOLD)
+        pack.setColorAt(i, AWESOME_VELVET)
         face.setColorAt(i, agent.eye)
         staticDirty = true
       }
@@ -1273,6 +1276,7 @@ export class Astronauts {
           : 0.55 + 0.45 * Math.sin(elapsed * 2.6 + agent.phase)
       tip.setColorAt(i, c.copy(agent.eye).multiplyScalar(0.6 + pulse * 1.1))
       lamp.setColorAt(i, c.copy(agent.trim).multiplyScalar(0.7 + pulse * 1.6))
+      void AWESOME_GOLD
 
       // Atlas frame for the face.
       const f = agent.faceFrame

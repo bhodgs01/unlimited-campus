@@ -18,7 +18,11 @@ const ICON = {
 
 const CSS = `
 .uc-title{position:absolute;left:14px;top:14px;padding:10px 14px;display:flex;align-items:center;gap:10px;pointer-events:auto}
-.uc-title b{font-size:14px;letter-spacing:.14em;text-transform:uppercase;font-weight:700}
+.uc-title b{font-family:Helvetica,'Helvetica Neue',Arial,sans-serif;font-size:14px;letter-spacing:.14em;text-transform:uppercase;font-weight:700}
+.uc-card h2,.uc-help h3{font-family:Helvetica,'Helvetica Neue',Arial,sans-serif}
+.uc-card .btn.primary{color:#fff}
+.uc-mantra{position:absolute;right:14px;bottom:max(14px,env(safe-area-inset-bottom));color:rgba(255,255,255,.55);font-size:12px;font-style:italic;pointer-events:none}
+@media (max-width:900px){.uc-mantra{display:none}}
 .uc-title i{width:9px;height:9px;border-radius:50%;background:${BRAND.purple};box-shadow:0 0 12px ${BRAND.purple}}
 .uc-title small{color:var(--muted);font-size:12px}
 .uc-chips{position:absolute;left:50%;bottom:max(14px,env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;gap:6px;padding:6px;max-width:calc(100vw - 28px);flex-wrap:wrap;justify-content:center}
@@ -59,7 +63,7 @@ export class Hud {
     this.el = document.createElement('div')
     this.el.className = 'hud'
     this.el.innerHTML = `
-      <div class="panel uc-title"><i></i><b>Unlimited Campus</b><small>Six Castles of Human Flourishing</small></div>
+      <div class="panel uc-title"><i></i><b>Unlimited Campus</b><small>The Human Operating System for the Intelligence Age</small></div>
       <div class="panel uc-people"></div>
       <div class="panel rail">
         <button class="btn" data-act="home" title="Home view (hold to save this view as home)">${ICON.home}</button>
@@ -79,6 +83,7 @@ export class Hud {
         <p>On a Quest, open this page in the headset browser and press Enter VR.</p>
         <div class="row"><button class="btn primary" data-act="closehelp">Got it</button></div>
       </div>
+      <div class="uc-mantra">The Universe is conspiring to help me.</div>
       <div class="toasts"></div>`
     root.appendChild(this.el)
     this.$ = (s) => this.el.querySelector(s)
