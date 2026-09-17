@@ -1434,6 +1434,29 @@ export function buildCampus(scene, { shadows = true, lite = false, merge = true 
     if (r) for (const t of transforms) obstacles.push({ x: t.x, z: t.z, r })
     built.dispose()
   }
+  // a walking spot under a canopy hides whoever stands there: keep spots clear of tree crowns
+  {
+    const cell = 4
+    const crowns = new Map()
+    for (const [name, list] of instances) {
+      if (!/tree/.test(name)) continue
+      for (const t of list) {
+        const k = `${Math.floor(t.x / cell)},${Math.floor(t.z / cell)}`
+        if (!crowns.has(k)) crowns.set(k, [])
+        crowns.get(k).push(t)
+      }
+    }
+    const underCrown = (x, z, r = 3.4) => {
+      const gx = Math.floor(x / cell)
+      const gz = Math.floor(z / cell)
+      for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const t of crowns.get(`${gx + i},${gz + j}`) || []) if ((t.x - x) ** 2 + (t.z - z) ** 2 < r * r) return true
+      return false
+    }
+    for (const k of Object.keys(spots)) {
+      const open = spots[k].filter((sp) => !underCrown(sp.x, sp.z))
+      if (open.length) spots[k] = open
+    }
+  }
   const standable = (p) => inIsland(p.x, p.z, 3) && !inWater(p.x, p.z, 1) && !inPlaced(p.x, p.z, 0.6)
   for (const k of Object.keys(spots)) spots[k] = spots[k].filter(standable)
   console.log('[campus] unplaced', [...new Set(rejected)].join(','), '| stamps dropped', dropped)

@@ -18,12 +18,12 @@ export class People {
     this.byId = new Map()
     this._v = new THREE.Vector3()
   }
-  async add(id, at) {
+  async add(id, at, { home = null, radius = 22, spots = null } = {}) {
     const g = build(id)
     if (!g) return null
     g.position.set(at.x, 0, at.z)
     this.scene.add(g)
-    const p = { id, g, pos: g.position, yaw: 0, target: null, pause: 1 + Math.random() * 2, gait: 0, phase: Math.random() * 6, exprAt: 2 + Math.random() * 3 }
+    const p = { id, g, home, radius, spots, pos: g.position, yaw: 0, target: null, pause: 1 + Math.random() * 2, gait: 0, phase: Math.random() * 6, exprAt: 2 + Math.random() * 3 }
     this.list.push(p)
     this.byId.set(id, p)
     return p
@@ -35,6 +35,25 @@ export class People {
     return this.byId.get(id) || null
   }
   _pick(p) {
+    // the famous wander near their own place rather than across the whole campus
+    if (p.spots?.length) {
+      for (let i = 0; i < 8; i++) {
+        const s = p.spots[Math.floor(Math.random() * p.spots.length)]
+        const x = s.x + (Math.random() - 0.5) * 3
+        const z = s.z + (Math.random() - 0.5) * 3
+        if (!this.nav?.isBlocked(x, z)) return { x, z }
+      }
+    }
+    if (p.home) {
+      for (let i = 0; i < 10; i++) {
+        const a = Math.random() * Math.PI * 2
+        const r = 3 + Math.random() * p.radius
+        const x = p.home.x + Math.cos(a) * r
+        const z = p.home.z + Math.sin(a) * r
+        if (!this.nav?.isBlocked(x, z)) return { x, z }
+      }
+      return null
+    }
     for (let i = 0; i < 8; i++) {
       const s = this.spots[Math.floor(Math.random() * this.spots.length)]
       if (!s) continue

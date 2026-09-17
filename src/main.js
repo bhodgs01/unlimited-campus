@@ -17,6 +17,8 @@ import { Fireworks } from './world/fireworks.js'
 import { Hud } from './ui/hud.js'
 import { installVr } from './vr.js'
 import { People } from './agents/people.js'
+import { FAMOUS } from './data/famous.js'
+import { chipFace } from './agents/family.js'
 import { PEOPLE } from './agents/family.js'
 
 /**
@@ -457,12 +459,38 @@ function findPerson(id) {
   hud.setActivePerson(id)
   const info = PEOPLE[id]
   p.g.userData.setExpression?.('happy')
+  if (info.famous) {
+    hud.showCard({ kicker: 'Famous teacher', image: chipFace(id), square: true, title: info.name, text: `${info.known}. ${info.edu}`, accent: BRAND.lime })
+    return
+  }
   hud.showCard({ kicker: info.role, title: info.name, text: info.intro, accent: id === 'alan' ? BRAND.purple : '#159daf' })
 }
 hud.setPeople(
-  Object.entries(PEOPLE).map(([id, info]) => ({ id, name: info.name.split(' ')[0], face: `${import.meta.env.BASE_URL}family/${id}-neutral.png` })),
+  ['blake', 'alan'].map((id) => ({ id, name: PEOPLE[id].name.split(' ')[0], face: chipFace(id) })),
   (id) => findPerson(id)
 )
+hud.setPeopleGroup(
+  'Famous teachers',
+  FAMOUS.map((f) => ({ id: f.id, name: f.name, known: f.known, face: chipFace(f.id) })),
+  (id) => findPerson(id)
+)
+/** Where each famous teacher lives: their landmark, nudged onto open ground nearby. */
+/** Where each famous teacher lives: the open walking spots nearest their landmark, so they
+ * stand on paths and lawns people use, never inside a grove. */
+const allSpots = Object.values(campus.spots).flat()
+const homesTaken = []
+function famousHome(f) {
+  const lm = campus.landmarks.find((l) => l.id === f.home)
+  if (!lm) return null
+  const near = allSpots
+    .map((sp) => ({ ...sp, d: Math.hypot(sp.x - lm.x, sp.z - lm.z) }))
+    .filter((sp) => sp.d < 45 && !nav.isBlocked(sp.x, sp.z))
+    .sort((a, b) => a.d - b.d)
+  const home = near.find((sp) => !homesTaken.some((h) => Math.hypot(h.x - sp.x, h.z - sp.z) < 6)) || near[0]
+  if (!home) return null
+  homesTaken.push(home)
+  return { x: home.x, z: home.z, spots: near.filter((sp) => Math.hypot(sp.x - home.x, sp.z - home.z) < 26) }
+}
 
 // ── VR ──────────────────────────────────────────────────────────────────────────────────
 const vr = installVr({ engine, rig, hud, astronauts, campus, cardFor, lite: LITE, onPick: (hit) => { if (hit.tag === 'badge') playBadge(hit.id) } })
@@ -555,6 +583,11 @@ async function boot() {
     await people.preload()
     await people.add('alan', { x: 5, z: -8 })
     await people.add('blake', { x: -5, z: -8 })
+    for (const f of FAMOUS) {
+      const home = famousHome(f)
+      if (home) people.add(f.id, home, { home, radius: 16, spots: home.spots })
+      else console.warn('[campus] no home for', f.id, f.home)
+    }
   } catch (err) {
     console.warn('people failed to load', err)
   }

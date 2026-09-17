@@ -4,6 +4,7 @@
  * Ported from the colony's family-builders.js; faces are served from /family/.
  */
 import * as THREE from 'three'
+import { FAMOUS } from '../data/famous.js'
 
 const EXPRESSIONS = ['neutral', 'happy', 'surprised', 'annoyed', 'sleepy']
 
@@ -11,12 +12,16 @@ export const PEOPLE = {
   blake: { name: 'Blake Hodgson', role: 'KC Proto', shirt: 0x159daf, skin: 0xe4ae88, height: 0.88, center: 1.245, intro: 'Built the campus. Ask me how the castles work.' },
   alan: { name: 'Alan Smithson', role: 'Unlimited Awesome', shirt: 0x1e2a48, skin: 0xe6c3a5, height: 0.9, center: 1.24, intro: 'Founder and CEO. Learning for the Intelligence Age.' },
 }
+/** Blake and Alan preload at boot; the famous faces load when each one is built. */
 export const FAMILY_IDS = Object.keys(PEOPLE)
+for (const f of FAMOUS) PEOPLE[f.id] = { ...f, role: f.known, intro: f.edu, famous: true, ext: 'webp', height: 0.9, center: 1.24 }
+export const FAMOUS_IDS = FAMOUS.map((f) => f.id)
+export const chipFace = (id) => `${import.meta.env.BASE_URL}family/${id}-${PEOPLE[id]?.famous ? 'chip.webp' : 'neutral.png'}`
 
 const assetBase = `${import.meta.env.BASE_URL}family/`
 const cache = new Map()
 function textureFor(id, expression) {
-  const url = `${assetBase}${id}-${expression}.png`
+  const url = `${assetBase}${id}-${expression}.${PEOPLE[id]?.ext || 'png'}`
   if (!cache.has(url)) {
     cache.set(
       url,
@@ -57,7 +62,7 @@ export function build(id) {
   const mat = (color) => new THREE.MeshStandardMaterial({ color, roughness: 0.8, metalness: 0.02, flatShading: true })
   const skin = mat(p.skin)
   const shirt = mat(p.shirt)
-  const trousers = mat(id === 'alan' ? 0x1e2a48 : 0x293e61)
+  const trousers = mat(p.trousers || (id === 'alan' ? 0x1e2a48 : 0x293e61))
   const shoe = mat(0x23272c)
   const add = (parent, geo, material, x = 0, y = 0, z = 0) => {
     const m = new THREE.Mesh(geo, material)

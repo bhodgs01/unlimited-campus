@@ -50,6 +50,18 @@ const CSS = `
 .uc-people button{display:flex;align-items:center;gap:7px;height:34px;padding:0 11px 0 4px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--text);font:inherit;font-size:12.5px;cursor:pointer}
 .uc-people button img{width:26px;height:26px;border-radius:50%;object-fit:cover;object-position:50% 30%;background:#2a2f3a}
 .uc-people button.active{background:rgba(229,1,255,.18);border-color:rgba(229,1,255,.55)}
+.uc-people .facestack{display:flex;flex:none;padding-left:2px}
+.uc-people .facestack img{width:24px;height:24px;margin-left:-9px;border:2px solid #15121c}
+.uc-people .facestack img:first-child{margin-left:0}
+.uc-people button .caret{opacity:.6;font-size:10px;margin-left:2px;transition:transform .2s}
+.uc-people button.open .caret{transform:rotate(180deg)}
+.uc-famous{position:absolute;left:14px;top:112px;width:min(430px,calc(100vw - 28px));max-height:min(60vh,520px);overflow:auto;padding:10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px;pointer-events:auto;z-index:5}
+.uc-famous[hidden]{display:none}
+.uc-famous .head{grid-column:1/-1;font-size:11px;letter-spacing:.12em;text-transform:uppercase;opacity:.65;padding:2px 4px 4px}
+.uc-famous button{display:flex;align-items:center;gap:8px;height:40px;padding:0 10px 0 4px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--text);font:inherit;font-size:12.5px;cursor:pointer;text-align:left;white-space:nowrap;overflow:hidden}
+.uc-famous button:hover{background:rgba(175,255,0,.1);border-color:rgba(175,255,0,.4)}
+.uc-famous button.active{background:rgba(229,1,255,.18);border-color:rgba(229,1,255,.55)}
+.uc-famous button img{width:32px;height:32px;border-radius:50%;object-fit:cover;background:#2a2f3a;flex:none}
 .uc-toast{padding:9px 13px;border-radius:10px;font-size:12.5px;max-width:320px}
 @media (max-width:640px){.uc-card{top:auto;bottom:64px;right:14px;left:14px;width:auto}.uc-title small{display:none}}
 `
@@ -67,6 +79,7 @@ export class Hud {
     this.el.innerHTML = `
       <div class="panel uc-title"><i></i><b>Unlimited Campus</b><small>The Human Operating System for the Intelligence Age</small></div>
       <div class="panel uc-people"></div>
+      <div class="panel uc-famous" hidden></div>
       <div class="panel rail">
         <button class="btn" data-act="home" title="Home view (hold to save this view as home)">${ICON.home}</button>
         <button class="btn" data-act="orbit" title="Orbit the campus">${ICON.orbit}</button>
@@ -151,8 +164,47 @@ export class Hud {
       wrap.appendChild(b)
     }
   }
+  /** One chip for a whole group (the famous teachers) that opens a dropdown of face chips. */
+  setPeopleGroup(label, list, onClick) {
+    const wrap = this.$('.uc-people')
+    const menu = this.$('.uc-famous')
+    const b = document.createElement('button')
+    b.dataset.group = 'famous'
+    b.title = `Find one of the ${list.length} ${label.toLowerCase()}`
+    b.innerHTML = `<span class="facestack">${list.slice(0, 3).map((p) => `<img src="${p.face}" alt="">`).join('')}</span>${label}<span class="caret">▼</span>`
+    const close = () => {
+      menu.hidden = true
+      b.classList.remove('open')
+    }
+    b.addEventListener('click', (e) => {
+      e.stopPropagation()
+      menu.hidden = !menu.hidden
+      b.classList.toggle('open', !menu.hidden)
+    })
+    wrap.appendChild(b)
+    menu.innerHTML = `<div class="head">${label} on campus</div>`
+    for (const p of list) {
+      const c = document.createElement('button')
+      c.dataset.person = p.id
+      c.title = p.known || p.name
+      c.innerHTML = `<img src="${p.face}" alt="" loading="lazy">${p.name}`
+      c.addEventListener('click', (e) => {
+        e.stopPropagation()
+        close()
+        onClick(p.id)
+      })
+      menu.appendChild(c)
+    }
+    menu.addEventListener('click', (e) => e.stopPropagation())
+    document.addEventListener('click', close)
+    this._groupIds = new Set(list.map((p) => p.id))
+  }
   setActivePerson(id) {
-    for (const b of this.$('.uc-people').children) b.classList.toggle('active', b.dataset.person === id)
+    for (const b of this.$('.uc-people').children) {
+      if (b.dataset.group) b.classList.toggle('active', Boolean(id && this._groupIds?.has(id)))
+      else b.classList.toggle('active', b.dataset.person === id)
+    }
+    for (const b of this.$('.uc-famous').children) if (b.dataset.person) b.classList.toggle('active', b.dataset.person === id)
   }
   setActiveChip(id) {
     for (const b of this.chips.children) b.classList.toggle('active', b.dataset.castle === id)
