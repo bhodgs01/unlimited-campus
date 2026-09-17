@@ -18,6 +18,7 @@ import { build, hashStr, mulberry32 } from './pieces.js'
 import { CASTLES } from '../data/castles.js'
 import { BADGE_ART, CASTLE_ART } from '../data/art.js'
 import { artTexture } from './badgeMoment.js'
+import { archFootbridge } from './footbridge.js'
 
 const P = Math.PI
 const Y_ROAD = 0.03
@@ -319,6 +320,10 @@ export function buildCampus(scene, { shadows = true, lite = false, merge = true 
   const placed = []
   const solids = []
   const reserved = []
+  const footbridges = []
+  const flagSpots = []
+  const pitches = []
+  const lakeInfo = {}
   const rejected = []
   const instances = new Map()
   const spots = { plaza: [], grounds: [] }
@@ -359,6 +364,14 @@ export function buildCampus(scene, { shadows = true, lite = false, merge = true 
   // ── the island ─────────────────────────────────────────────────────────────────────
   const SEA_Y = -6
   const ISLAND = { rx: 252, rz: 166, wall: 7, seed: 0x15a7 }
+  /** The beach cove on the west coast: centred on heading `t`, `half` radians either side. */
+  const COVE = { t: P, half: 0.24, depth: 20, reach: 12 }
+  const coveBump = (t) => {
+    const d = Math.atan2(Math.sin(t - COVE.t), Math.cos(t - COVE.t))
+    if (Math.abs(d) >= COVE.half) return 0
+    const c = Math.cos((d / COVE.half) * (P / 2))
+    return c * c
+  }
   const seaMat = new THREE.MeshStandardMaterial({ color: 0x2a6fb5, roughness: 0.55, metalness: 0.0, emissive: new THREE.Color(0x061e3a) })
   const sea = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5000), seaMat)
   sea.rotation.x = -P / 2
@@ -373,7 +386,10 @@ export function buildCampus(scene, { shadows = true, lite = false, merge = true 
     const a1 = rand() * P * 2
     const a2 = rand() * P * 2
     const a3 = rand() * P * 2
-    return (t) => 1 + 0.05 * Math.sin(t * 2 + a1) + 0.035 * Math.sin(t * 3 + a2) + 0.02 * Math.sin(t * 7 + a3)
+    const base = (t) => 1 + 0.05 * Math.sin(t * 2 + a1) + 0.035 * Math.sin(t * 3 + a2) + 0.02 * Math.sin(t * 7 + a3)
+    // the west coast bites inward into a cove, and the cove is a beach (see "the beach" below)
+    const f = (t, cove = true) => base(t) - (cove ? (COVE.depth / ISLAND.rx) * coveBump(t) : 0)
+    return f
   })()
   const islandShape = new THREE.Shape()
   for (let i = 0; i <= 200; i++) {
@@ -390,10 +406,12 @@ export function buildCampus(scene, { shadows = true, lite = false, merge = true 
   island.receiveShadow = true
   island.name = 'island'
   group.add(island)
-  const rimPoint = (t, inset) => {
-    const k = islandRadius(t)
+  const rimPoint = (t, inset, cove = true) => {
+    const k = islandRadius(t, cove)
     return { x: Math.cos(t) * (ISLAND.rx * k - inset), z: Math.sin(t) * (ISLAND.rz * k - inset * (ISLAND.rz / ISLAND.rx)) }
   }
+  /** The coast as if there were no cove: the sea lanes keep clear of the beach. */
+  const seaPoint = (t, inset) => rimPoint(t, inset, false)
   /** Inside the island by at least `inset` metres (roughly). */
   const inIsland = (x, z, inset = 0) => {
     const t = Math.atan2(z / ISLAND.rz, x / ISLAND.rx)
@@ -693,7 +711,10 @@ export function buildCampus(scene, { shadows = true, lite = false, merge = true 
     for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) stamp('floodlight', x + sx * (w / 2 + 2.5), z + sz * (d / 2 + 2.5), Math.atan2(-sx, -sz))
     placeAny('stadiumstand', [{ x, z: z + d / 2 + 6, ry: P }], { district: 'grounds' })
     placeAny('scoreboard', [{ x: x - w / 2 - 4.5, z, ry: P / 2 }], { district: 'grounds' })
-    for (let i = 0; i < 16; i++) spots.grounds.push({ x: x - 16 + (i % 8) * 4.5, z: z + (i < 8 ? -6 : 6) })
+    // spectators' spots along the far touchline; the pitch itself belongs to the game
+    for (let i = 0; i < 10; i++) spots.grounds.push({ x: x - 15 + i * 3.3, z: z - d / 2 - 3.2 })
+    for (const ox of [-12, 0, 12]) obstacles.push({ x: x + ox, z, r: 11 })
+    pitches.push({ x, z, w, d, goalHalf: 1.62, scoreboard: { x: x - w / 2 - 4.5, z }, stand: { x, z: z + d / 2 + 6 } })
   }
   pitch(-150, 26)
   pitch(150, 26)
@@ -705,8 +726,7 @@ export function buildCampus(scene, { shadows = true, lite = false, merge = true 
     const a = (i / 14) * P * 2
     stamp(i % 3 ? 'reedclump' : 'lilypads', -150 + Math.cos(a) * (i % 3 ? 11 : 7), -78 + Math.sin(a) * (i % 3 ? 11 : 7), a, 1)
   }
-  place('canoe', -153, -80, { district: 'brain', ry: 0.6, y: Y_WATER, solid: false, obstacle: false })
-  place('rowboat', -145, -74, { district: 'grounds', ry: 2.1, y: Y_WATER, solid: false, obstacle: false })
+  Object.assign(lakeInfo, { x: -150, z: -78, r: 13.5 })
   placeAny('boatshed', [{ x: -127, z: -78, ry: -P / 2 }, { x: -171, z: -78, ry: P / 2 }], { district: 'grounds' })
   placeAny('gazebo', [{ x: -170, z: -62 }, { x: -130, z: -62 }], { district: 'grounds' })
   landmarks.push({ id: 'lake', name: 'The Lake', x: -150, y: 3, z: -78, kind: 'place' })
@@ -724,6 +744,162 @@ export function buildCampus(scene, { shadows = true, lite = false, merge = true 
   placeAny('campusbus', [{ x: -143, z: 87, ry: 0.1 }], { district: 'grounds' })
   placeAny('bikeshed', [{ x: -153, z: 90 }], { district: 'grounds' })
   for (let i = 0; i < 10; i++) spots.grounds.push({ x: -170 + i * 5, z: 78 })
+
+  // ── the beach: a sandy cove on the west coast, down to the sea ─────────────────────────
+  // The island is a plateau 6 m above the sea, so the cove is a slope: level with the lawn at
+  // the new coast, easing down to the waterline well out past where the cliff used to be.
+  const beach = (() => {
+    const T0 = COVE.t - COVE.half
+    const T1 = COVE.t + COVE.half
+    const NT = 72
+    const NU = 18
+    const DROP = SEA_Y - 0.9
+    /** How far out the sand runs at heading t, measured from the (coved) coast. */
+    const reach = (t) => (COVE.depth + COVE.reach) * Math.sqrt(coveBump(t))
+    const profile = (k) => 0.04 + (DROP - 0.04) * Math.pow(k, 1.45)
+    const WATER_K = Math.pow((SEA_Y - 0.04) / (DROP - 0.04), 1 / 1.45)
+    const at = (t, u) => rimPoint(t, -u)
+    const pos = []
+    const col = []
+    const idx = []
+    const dry = new THREE.Color(0xdcbb82)
+    const damp = new THREE.Color(0xa98a5c)
+    const c = new THREE.Color()
+    for (let i = 0; i <= NT; i++) {
+      const t = T0 + ((T1 - T0) * i) / NT
+      const L = reach(t)
+      for (let j = 0; j <= NU; j++) {
+        const k = j / NU
+        const p = at(t, L * k - 0.6)
+        const y = j === 0 ? 0.05 : profile(k)
+        pos.push(p.x, y, p.z)
+        c.copy(dry).lerp(damp, THREE.MathUtils.smoothstep(k, WATER_K - 0.22, WATER_K))
+        col.push(c.r, c.g, c.b)
+      }
+    }
+    for (let i = 0; i < NT; i++)
+      for (let j = 0; j < NU; j++) {
+        const a = i * (NU + 1) + j
+        const b = a + NU + 1
+        idx.push(a, b, a + 1, b, b + 1, a + 1)
+      }
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3))
+    g.setIndex(idx)
+    g.computeVertexNormals()
+    const sand = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, side: THREE.DoubleSide }))
+    sand.receiveShadow = true
+    sand.name = 'beach'
+    group.add(sand)
+
+    /** A band along the shore, `off0`..`off1` metres past the waterline. */
+    const band = (off0, off1, y) => {
+      const bp = []
+      const bi = []
+      for (let i = 0; i <= NT; i++) {
+        const t = T0 + ((T1 - T0) * i) / NT
+        const w = reach(t) * WATER_K
+        for (const off of [off0, off1]) {
+          const p = at(t, Math.max(0, w + off))
+          bp.push(p.x, y, p.z)
+        }
+      }
+      for (let i = 0; i < NT; i++) {
+        const a = i * 2
+        bi.push(a, a + 2, a + 1, a + 2, a + 3, a + 1)
+      }
+      const bg = new THREE.BufferGeometry()
+      bg.setAttribute('position', new THREE.Float32BufferAttribute(bp, 3))
+      bg.setIndex(bi)
+      bg.computeVertexNormals()
+      return bg
+    }
+    const shallows = new THREE.Mesh(band(-0.5, 14, SEA_Y + 0.03), new THREE.MeshBasicMaterial({ color: 0x5fd0d8, transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide }))
+    group.add(shallows)
+    const foamMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6, depthWrite: false, side: THREE.DoubleSide })
+    const foam = new THREE.Mesh(band(-0.3, 1.1, SEA_Y + 0.06), foamMat)
+    const foam2 = new THREE.Mesh(band(2.6, 3.3, SEA_Y + 0.05), foamMat.clone())
+    group.add(foam, foam2)
+    let clock = 0
+    animated.push({
+      tick(dt) {
+        clock += dt
+        // a slow swell: the foam line breathes in and out, the outer line runs in behind it
+        const w = Math.sin(clock * 0.8)
+        foam.position.set(Math.cos(COVE.t) * w * 0.7, 0, Math.sin(COVE.t) * w * 0.7)
+        foamMat.opacity = 0.45 + 0.25 * (0.5 + 0.5 * Math.sin(clock * 0.8 + 1.2))
+        const r = (clock * 0.25) % 1
+        foam2.position.set(Math.cos(COVE.t) * (1 - r) * 3, 0, Math.sin(COVE.t) * (1 - r) * 3)
+        foam2.material.opacity = 0.5 * Math.sin(r * P)
+      },
+    })
+
+    // where things stand: t across the cove, k from the top of the sand (0) to the water (WATER_K)
+    const point = (t, k) => {
+      const L = reach(t)
+      const p = at(t, L * k - 0.6)
+      return { x: p.x, z: p.z, y: k <= 0 ? 0.05 : profile(k), t, k }
+    }
+    /** Height of the sand under any point on the beach, or null off it. */
+    const yAt = (x, z) => {
+      const t = Math.atan2(z / ISLAND.rz, x / ISLAND.rx)
+      if (!coveBump(t)) return null
+      const L = reach(t)
+      const rim = rimPoint(t, -0.6)
+      const out = Math.hypot(x, z) - Math.hypot(rim.x, rim.z)
+      if (out < 0 || out > L) return null
+      return profile(out / L)
+    }
+
+    // a boardwalk from the end of the west avenue down onto the sand
+    const top = point(COVE.t, 0)
+    const BOARD = 0xa9855a
+    F(flat(Math.abs(top.x + 183) + 2, 3.2, BOARD, (top.x - 183) / 2, 0, Y_PAVE))
+    for (let i = 0; i < 6; i++) stamp('lamppost', -186 - i * ((Math.abs(top.x + 183) - 4) / 5), i % 2 ? 2.4 : -2.4, i % 2 ? P : 0)
+
+    // rocks where the sand meets the cliffs at each end of the cove
+    for (const end of [-1, 1]) {
+      for (let i = 0; i < 5; i++) {
+        const t = COVE.t + end * (COVE.half * (0.86 + i * 0.03))
+        const q = point(t, 0.25 + i * 0.16)
+        const b = build(i % 2 ? 'rock' : 'rockcluster', { district: 'grounds', seed: hashStr(`cove${end}${i}`), shadows, scale: 1.7 * (1.3 + (i % 3) * 0.45) })
+        if (!b) continue
+        b.root.position.set(q.x, q.y - 0.4, q.z)
+        b.root.rotation.y = i * 1.3
+        group.add(b.root)
+      }
+    }
+    // a lifeguard tower on the sand, facing the sea
+    const lg = point(COVE.t - 0.05, 0.45)
+    {
+      const tower = new THREE.Group()
+      const white = new THREE.MeshStandardMaterial({ color: 0xf4efe4, roughness: 0.7 })
+      const red = new THREE.MeshStandardMaterial({ color: 0xe0493a, roughness: 0.7 })
+      for (const [lx, lz] of [[-0.8, -0.8], [0.8, -0.8], [-0.8, 0.8], [0.8, 0.8]]) {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.18, 3.6, 0.18), white)
+        leg.position.set(lx, 1.4, lz)
+        tower.add(leg)
+      }
+      const hut = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.5, 2.2), red)
+      hut.position.y = 3.9
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(1.9, 1.0, 4), white)
+      roof.position.y = 5.15
+      roof.rotation.y = P / 4
+      const deck = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.14, 2.8), white)
+      deck.position.y = 3.2
+      tower.add(hut, roof, deck)
+      tower.traverse((o) => o.isMesh && ((o.castShadow = shadows), (o.receiveShadow = true)))
+      tower.position.set(lg.x, lg.y, lg.z)
+      group.add(tower)
+    }
+    // a beach cafe by the top of the boardwalk
+    const cafeAt = rimPoint(COVE.t + 0.075, 10)
+    placeAny('cafepavilion', [{ x: cafeAt.x, z: cafeAt.z, ry: -P / 2 }, { x: cafeAt.x - 5, z: cafeAt.z, ry: -P / 2 }, { x: cafeAt.x - 9, z: cafeAt.z + 4, ry: -P / 2 }], { district: 'grounds' })
+    reserved.push({ x: top.x - 4, z: 0, r: 6 })
+    landmarks.push({ id: 'beach', name: 'The Beach', x: point(COVE.t, 0.4).x, y: 2, z: point(COVE.t, 0.4).z, kind: 'place' })
+    return { cove: COVE, point, yAt, waterK: WATER_K, top, lifeguard: lg, T0, T1 }
+  })()
 
   // ── the east column: the pond, the science park, the playground by the river ─────────
   lake('pond', 150, -78, 12.5, 21)
@@ -820,7 +996,8 @@ export function buildCampus(scene, { shadows = true, lite = false, merge = true 
       }
     }
     for (const s of [-1, 1]) {
-      place('castlebanner', pose.x + fx * (fore - 4) + Math.cos(pose.ry) * s * 13, pose.z + fz * (fore - 4) - Math.sin(pose.ry) * s * 13, { district: castle.id, ry: pose.ry, solid: false })
+      // tall flags in the castle's colour (campus life raises and waves them)
+      flagSpots.push({ x: pose.x + fx * (fore - 4) + Math.cos(pose.ry) * s * 13, z: pose.z + fz * (fore - 4) - Math.sin(pose.ry) * s * 13, accent: castle.accent })
       stamp('topiaryball', pose.x + fx * (fore - 7) + Math.cos(pose.ry) * s * 9, pose.z + fz * (fore - 7) - Math.sin(pose.ry) * s * 9, 0, 1)
     }
     // castle's own artwork from unlimitedawesome.com, displayed as a large ground plaque on the forecourt
@@ -960,13 +1137,55 @@ export function buildCampus(scene, { shadows = true, lite = false, merge = true 
       }
       return best
     }
+    // Arched timber footbridges, humped high enough for the river boats to pass under, with
+    // both landings well inside the coast (the old flat ones sat at boat height, and the one
+    // by the east mouth hung its far end over the sea).
     const mid = (RIVER.sMin + RIVER.sMax) / 2
-    const footS = [farthest(RIVER.sMin + 25, mid), farthest(mid, RIVER.sMax - 25)]
-    for (const [i, s] of footS.entries()) {
-      const f = i === 0 ? 0 : 1
+    const FOOT_SPAN = RIVER.shore * 2 + 9
+    const landed = (s) => [-1, 1].every((side) => {
+      const q = riverPoint(s, side * (FOOT_SPAN / 2))
+      return inIsland(q.x, q.z, 3)
+    })
+    // the two spots that sit farthest from the road bridges, the river mouths and each other
+    // (the south stretch hugs the coast with no land across it, so both usually land up north)
+    const cands = []
+    for (let s = RIVER.sMin + 15; s <= RIVER.sMax - 15; s += 2) if (landed(s)) cands.push(s)
+    const room = (s) => Math.min(...crossS.map((c) => Math.abs(c - s)), s - RIVER.sMin, RIVER.sMax - s)
+    let footS = []
+    let bestPair = -1
+    for (const a of cands)
+      for (const b of cands) {
+        if (b <= a) continue
+        const d = Math.min(room(a), room(b), b - a)
+        if (d > bestPair) {
+          bestPair = d
+          footS = [a, b]
+        }
+      }
+    void farthest
+    void mid
+    for (const s of footS) {
       const p = riverPoint(s)
-      bridge(f < 0.5 ? 'plankbridge' : 'ropebridge', p.x, p.z, Math.atan2(-RIVER.nz, RIVER.nx), RIVER.shore * 2 + 6)
-      for (const side of [-1, 1]) spots.grounds.push(riverPoint(s, side * (RIVER.shore + 5)))
+      // the river's centreline wanders, so aim the span along the local cross-direction
+      const a = riverPoint(s - 2)
+      const b = riverPoint(s + 2)
+      const tx = b.x - a.x
+      const tz = b.z - a.z
+      const len = Math.hypot(tx, tz) || 1
+      const nx = tz / len
+      const nz = -tx / len
+      const fb = archFootbridge({ span: FOOT_SPAN, width: 2.8, rise: 4.6, landing: 3.4 })
+      fb.position.set(p.x, 0.02, p.z)
+      fb.rotation.y = Math.atan2(-nz, nx)
+      group.add(fb)
+      footbridges.push({ x: p.x, z: p.z, nx, nz, span: FOOT_SPAN, root: fb })
+      for (const side of [-1, 1]) {
+        const q = { x: p.x + nx * side * (FOOT_SPAN / 2 - 1.5), z: p.z + nz * side * (FOOT_SPAN / 2 - 1.5) }
+        reserved.push({ x: q.x, z: q.z, r: 5 })
+        obstacles.push({ x: q.x, z: q.z, r: 2 })
+        spots.grounds.push({ x: p.x + nx * side * (FOOT_SPAN / 2 + 4), z: p.z + nz * side * (FOOT_SPAN / 2 + 4) })
+      }
+      reserved.push({ x: p.x, z: p.z, r: FOOT_SPAN / 2 })
     }
     landmarks.push({ id: 'river', name: 'The River', ...riverPoint(RIVER.sMin + (RIVER.sMax - RIVER.sMin) * 0.4), y: 3, kind: 'place' })
   }
@@ -1158,7 +1377,7 @@ export function buildCampus(scene, { shadows = true, lite = false, merge = true 
     ]
     ;(LITE ? SEA_SHIPS.slice(0, 6) : SEA_SHIPS).forEach(([name, district, scale, dist, speed, dir], i) => {
       const pts = []
-      for (let k = 0; k <= 160; k++) pts.push(rimPoint((dir * k * P * 2) / 160, -dist))
+      for (let k = 0; k <= 160; k++) pts.push(seaPoint((dir * k * P * 2) / 160, -dist))
       const ring = route([pathLeg(pts, speed, SEA_Y)])
       vessel(name, district, 1.7 * scale, ring, ((i * 0.618) % 1) * ring.total, { roll: 0.035 })
     })
@@ -1459,6 +1678,14 @@ export function buildCampus(scene, { shadows = true, lite = false, merge = true 
     spots,
     gate,
     placed,
+    beach,
+    flagSpots,
+    footbridges,
+    pitches,
+    lake: lakeInfo,
+    lamps: (instances.get('lamppost') || []).map((t) => ({ x: t.x, z: t.z })),
+    floodlights: (instances.get('floodlight') || []).map((t) => ({ x: t.x, z: t.z, ry: t.ry })),
+    groundY: (x, z) => beach.yAt(x, z) ?? 0,
     stats: { placed: placedCount, instanced: [...instances.values()].reduce((n, t) => n + t.length, 0), animated: animated.length, flats: flats.length, rejected: rejected.length, merged: mergeStats.roots, mergedMeshes: mergeStats.meshes },
     tick(dt, camera) {
       for (const b of animated) b.tick(dt)

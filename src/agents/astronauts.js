@@ -531,8 +531,15 @@ export class Astronauts {
     const wantsYou = ['waiting', 'blocked', 'mail', 'print', 'door', 'plant', 'visitor', 'dada'].includes(entry.status)
     const hustle = settled || wantsYou
 
+    const puppet = entry.puppet || null
+    if (puppet) start.set(puppet.x, puppet.y || 0, puppet.z)
     const agent = {
       id: entry.id,
+      /**
+       * A puppet is driven from outside: a game, a lecture, a queue. It owns its position,
+       * heading and clip every frame, and the crowd only draws it (and steps round it).
+       */
+      puppet,
       thread: entry.thread,
       status: entry.status,
       site: entry.site ? entry.site.clone() : new THREE.Vector3(),
@@ -555,7 +562,7 @@ export class Astronauts {
       faceFrame: FACE.boot,
       faceTimer: 0,
       faceIndex: 0,
-      suit: SUIT_TONES[(hash(entry.id) >>> 3) % SUIT_TONES.length],
+      suit: puppet?.suit ?? SUIT_TONES[(hash(entry.id) >>> 3) % SUIT_TONES.length],
       eye: new THREE.Color(1, 1, 1),
       trim: new THREE.Color(0xffffff),
       hop: 0,
@@ -577,7 +584,7 @@ export class Astronauts {
       frame: 0,
       wander: new THREE.Vector3(),
       wanderAt: 0,
-      scale: atPost ? 1 : 0, // pops up out of the ship, unless already at work
+      scale: atPost || puppet ? 1 : 0, // pops up out of the ship, unless already at work
       alive: true,
       path: null,
       pathAt: 0,
@@ -680,7 +687,8 @@ export class Astronauts {
     for (let i = this.agents.length - 1; i >= 0; i--) {
       const agent = this.agents[i]
       agent.stateAge += dt
-      this._step(agent, dt, elapsed, anim)
+      if (agent.puppet) this._puppet(agent)
+      else this._step(agent, dt, elapsed, anim)
       this._animate(agent, dt, anim)
       this._face(agent, dt)
 
@@ -694,6 +702,21 @@ export class Astronauts {
 
     this._writeMatrices(elapsed, anim)
     return write
+  }
+
+  /** Copy a puppet's pose off whatever drives it. */
+  _puppet(agent) {
+    const p = agent.puppet
+    agent.state = 'at-site'
+    agent.pos.set(p.x, p.y || 0, p.z)
+    agent.yaw = p.yaw || 0
+    agent.targetYaw = agent.yaw
+    agent.groundSpeed = p.speed || 0
+    agent.scale = p.scale ?? 1
+    if (p.suit != null && p.suit !== agent.suit) {
+      agent.suit = p.suit
+      agent.colorDirty = true
+    }
   }
 
   /**
@@ -1120,7 +1143,9 @@ export class Astronauts {
     // just under the line.
     const speed = agent.groundSpeed || 0
     let key
-    if (agent.state === 'spawning') key = 'spawn'
+    const puppet = agent.puppet
+    if (puppet?.clip) key = puppet.clip
+    else if (agent.state === 'spawning') key = 'spawn'
     else if (speed > 0.12) key = speed > WALK_SPEED * 1.25 ? 'run' : 'walk'
     else {
       switch (agent.status) {
@@ -1169,19 +1194,20 @@ export class Astronauts {
       }
     }
 
-    if (key !== agent.clipKey) {
+    if (key !== agent.clipKey || puppet?.restart) {
       agent.clipKey = key
-      agent.clipTime = 0
+      agent.clipTime = puppet?.clipTime ?? 0
+      if (puppet) puppet.restart = false
     }
 
     const clip = rig.clips[key] || rig.clips.idle
     if (!clip) return
 
     // Stride rate follows the ground, everything else runs at its authored speed.
-    const rate = key === 'walk' || key === 'run' ? THREE.MathUtils.clamp(speed / WALK_SPEED, 0.4, 2.1) : 1
+    const rate = puppet?.rate ?? (key === 'walk' || key === 'run' ? THREE.MathUtils.clamp(speed / WALK_SPEED, 0.4, 2.1) : 1)
     agent.clipTime += dt * anim * rate
 
-    if (key === 'sitDown' && agent.clipTime >= clip.duration) {
+    if (key === 'sitDown' && agent.clipTime >= clip.duration && !puppet) {
       agent.clipKey = 'sit'
       agent.clipTime = 0
       agent.frame = frameFor(rig.clips.sit, 0)

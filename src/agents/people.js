@@ -18,12 +18,13 @@ export class People {
     this.byId = new Map()
     this._v = new THREE.Vector3()
   }
-  async add(id, at, { home = null, radius = 22, spots = null } = {}) {
+  async add(id, at, { home = null, radius = 22, spots = null, pace = null } = {}) {
     const g = build(id)
     if (!g) return null
-    g.position.set(at.x, 0, at.z)
+    g.position.set(at.x, pace?.y || 0, at.z)
     this.scene.add(g)
-    const p = { id, g, home, radius, spots, pos: g.position, yaw: 0, target: null, pause: 1 + Math.random() * 2, gait: 0, phase: Math.random() * 6, exprAt: 2 + Math.random() * 3 }
+    // `pace`: walk between two marks on a stage and talk to the room, facing `faceYaw`
+    const p = { id, g, home, radius, spots, pace, paceAt: 0, baseY: pace?.y || 0, pos: g.position, yaw: pace?.faceYaw || 0, target: null, pause: 1 + Math.random() * 2, gait: 0, phase: Math.random() * 6, exprAt: 2 + Math.random() * 3 }
     this.list.push(p)
     this.byId.set(id, p)
     return p
@@ -35,6 +36,11 @@ export class People {
     return this.byId.get(id) || null
   }
   _pick(p) {
+    if (p.pace) {
+      p.paceAt = (p.paceAt + 1) % 2
+      const m = p.paceAt ? p.pace.a : p.pace.b
+      return { x: m.x + (Math.random() - 0.5) * 0.6, z: m.z + (Math.random() - 0.5) * 0.4 }
+    }
     // the famous wander near their own place rather than across the whole campus
     if (p.spots?.length) {
       for (let i = 0; i < 8; i++) {
@@ -78,7 +84,7 @@ export class People {
         const d = Math.hypot(dx, dz)
         if (d < 0.4) {
           p.target = null
-          p.pause = 1.5 + Math.random() * 4
+          p.pause = p.pace ? 4 + Math.random() * 5 : 1.5 + Math.random() * 4
         } else {
           const want = Math.atan2(dx, dz)
           let diff = want - p.yaw
@@ -87,7 +93,7 @@ export class People {
           const step = Math.min(d, SPEED * dt)
           const nx = p.pos.x + Math.sin(p.yaw) * step
           const nz = p.pos.z + Math.cos(p.yaw) * step
-          if (this.nav?.isBlocked(nx, nz)) {
+          if (!p.pace && this.nav?.isBlocked(nx, nz)) {
             p.target = null
             p.pause = 0.5
           } else {
@@ -97,6 +103,12 @@ export class People {
           }
         }
       }
+      // a speaker at rest turns back to the audience
+      if (p.pace && !walking) {
+        let diff = p.pace.faceYaw - p.yaw
+        diff = Math.atan2(Math.sin(diff), Math.cos(diff))
+        p.yaw += diff * Math.min(1, dt * 3)
+      }
       p.gait += ((walking ? 1 : 0) - p.gait) * Math.min(1, dt * 6)
       p.phase += dt * 8 * p.gait
       const u = p.g.userData
@@ -104,13 +116,19 @@ export class People {
       if (u.arms) {
         u.arms[0].rotation.x = swing
         u.arms[1].rotation.x = -swing
+        // talking with his hands
+        if (p.pace && p.gait < 0.3) {
+          const k = 1 - p.gait / 0.3
+          u.arms[0].rotation.x = swing - k * (0.9 + Math.sin(elapsed * 2.1) * 0.35)
+          u.arms[1].rotation.x = -swing - k * Math.max(0, Math.sin(elapsed * 1.3 + 1)) * 0.6
+        }
       }
       if (u.legs) {
         u.legs[0].rotation.x = -swing
         u.legs[1].rotation.x = swing
       }
       p.g.rotation.y = p.yaw
-      p.g.position.y = Math.abs(Math.sin(p.phase)) * 0.03 * p.gait
+      p.g.position.y = p.baseY + Math.abs(Math.sin(p.phase)) * 0.03 * p.gait
       p.exprAt -= dt
       if (p.exprAt <= 0) {
         p.exprAt = 2.5 + Math.random() * 4

@@ -20,6 +20,7 @@ import { People } from './agents/people.js'
 import { FAMOUS } from './data/famous.js'
 import { chipFace } from './agents/family.js'
 import { PEOPLE } from './agents/family.js'
+import { Life } from './life/index.js'
 
 /**
  * Boot and the frame loop.
@@ -82,7 +83,10 @@ console.log('[campus]', campus.stats)
 const nav = new Navigation()
 nav.rebuild(campus.obstacles)
 
-if (!LITE && settings.get('maxAgents') < 420) settings.set('maxAgents', 420)
+// campus life: games, class, lunch lines, the beach; its people are puppets in the crowd
+const life = new Life(engine.scene, campus, { lite: LITE, shadows })
+const CROWD = (LITE ? 160 : 420) + life.entries.length
+if (settings.get('maxAgents') < CROWD) settings.set('maxAgents', CROWD)
 const astronauts = new Astronauts(engine.scene, settings)
 astronauts.setNavigation(nav)
 const world = { shipDoor: () => new THREE.Vector3(campus.gate.x, 0, campus.gate.z), groundAt: () => 0 }
@@ -90,7 +94,8 @@ astronauts.world = world
 
 // ── the people ──────────────────────────────────────────────────────────────────────────
 const FIRST = ['Ava', 'Noah', 'Mia', 'Liam', 'Zoe', 'Ethan', 'Leila', 'Kai', 'Maya', 'Arjun', 'Sofia', 'Jonas', 'Priya', 'Mateo', 'Hana', 'Omar', 'Ella', 'Theo', 'Nia', 'Ravi', 'Ines', 'Yusuf', 'Chloe', 'Diego', 'Amara', 'Felix', 'Sara', 'Luca', 'Aisha', 'Owen']
-const roster = []
+// the puppets go first, so a capped crowd never drops a goalkeeper
+const roster = [...life.entries]
 let n = 0
 function student(castleId, spot) {
   const name = FIRST[n % FIRST.length]
@@ -218,7 +223,7 @@ function cardFor(hit) {
     const entry = roster.find((r) => r.id === a.id)
     const c = entry?.castle ? castleById(entry.castle) : null
     return {
-      kicker: entry?.kind === 'guide' ? 'Awesomenaut guide' : entry?.kind === 'mentor' ? 'Mentor' : entry?.kind === 'tutor' ? 'AI Tutor' : 'Awesomenaut',
+      kicker: entry?.kicker || (entry?.kind === 'guide' ? 'Awesomenaut guide' : entry?.kind === 'mentor' ? 'Mentor' : entry?.kind === 'tutor' ? 'AI Tutor' : 'Awesomenaut'),
       title: entry?.thread.title || 'Someone',
       text: entry?.thread.intro || '',
       accent: c?.accent || (entry?.kind === 'mentor' ? BRAND.lime : BRAND.purple),
@@ -270,7 +275,7 @@ function cardFor(hit) {
   }
   const INFO = {
     hall: ['The Great Hall', 'Where the AI tutor lives. Every lesson starts here.'],
-    amphitheater: ['The Amphitheater', 'Mentor talks, showcases and the badge ceremonies.'],
+    amphitheater: ['The Amphitheater', 'Class is in: Socrates is teaching, and the questions are the lesson. Stay to the end for the graduation.'],
     mentors: ['Hall of Mentors', '190+ world-class mentors: founders, CEOs, directors, scientists.'],
     library: ['The Library', '350+ modules and 1,500+ media assets.'],
     observatory: ['The Observatory', 'Space, and everything you can see from here.'],
@@ -367,9 +372,12 @@ const labels = (() => {
   style.textContent = `.uc-labels{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:5}
   .uc-label{position:absolute;left:0;top:0;transform:translate(-50%,-100%);padding:5px 11px;border-radius:999px;background:rgba(14,17,26,.78);color:#eef1f7;font-size:12.5px;font-weight:600;letter-spacing:.01em;white-space:nowrap;border:1px solid rgba(255,255,255,.12);box-shadow:0 4px 14px rgba(0,0,0,.35);backdrop-filter:blur(6px);pointer-events:auto;cursor:pointer;transition:opacity .25s ease;will-change:transform}
   .uc-label i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px;vertical-align:1px}
-  .uc-label.place{font-weight:500;color:#cfd6e4}`
+  .uc-label.place{font-weight:500;color:#cfd6e4}
+  .uc-label.score i.r{margin:0 0 0 7px}
+  .uc-label.score b{color:#ffd27a;font-variant-numeric:tabular-nums}`
   document.head.appendChild(style)
-  const items = campus.landmarks.map((l) => {
+  for (const [i, s] of life.soccer.entries()) campus.landmarks.push({ id: `score${i}`, name: s.label, x: s.pitch.x, y: 7, z: s.pitch.z, kind: 'score', score: s })
+  const items = campus.landmarks.filter((l) => l.id !== 'pitches').map((l) => {
     const el = document.createElement('div')
     el.className = `uc-label ${l.kind}`
     el.innerHTML = `${l.accent ? `<i style="background:${l.accent};box-shadow:0 0 8px ${l.accent}"></i>` : ''}${l.name}`
@@ -385,6 +393,7 @@ const labels = (() => {
       }
     })
     layer.appendChild(el)
+    if (l.score) l.score.onGoal = (s) => (el.innerHTML = s.label)
     return { l, el, v: new THREE.Vector3(), shown: false }
   })
   let visible = true
@@ -575,6 +584,7 @@ engine.add({
     if (engine.bloomPass) engine.bloomPass.strength = bloomWanted
     if (!vr.active) labels.update()
     campus.tick(dt, engine.camera)
+    life.update(dt, elapsed, nightK)
     badgeMoments.update(dt, engine.camera)
     fireworks.update(dt, nightK)
     mark.userData.tick(dt)
@@ -595,6 +605,12 @@ async function boot() {
     await people.add('alan', { x: 5, z: -8 })
     await people.add('blake', { x: -5, z: -8 })
     for (const f of FAMOUS) {
+      // Socrates teaches the class in the amphitheater
+      if (f.id === 'socrates' && life.lecture) {
+        const st = life.lecture.stage
+        people.add(f.id, st.a, { pace: st })
+        continue
+      }
       const home = famousHome(f)
       if (home) people.add(f.id, home, { home, radius: 16, spots: home.spots })
       else console.warn('[campus] no home for', f.id, f.home)
@@ -624,4 +640,4 @@ boot()
 engine.canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); console.warn('webgl context lost'); hud.toast('Graphics context lost, reloading…', 'err'); setTimeout(() => location.reload(), 1500) })
 
 // handy for probes
-window.__campus = { engine, rig, sky, campus, astronauts, roster, settings, hud, vr, people, playBadge, fireworks, LITE }
+window.__campus = { engine, rig, sky, campus, astronauts, roster, settings, hud, vr, people, playBadge, fireworks, life, LITE }
