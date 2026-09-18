@@ -246,16 +246,20 @@ export class CourseHall {
 
   paint(built, texture) {
     if (!built || !texture) return null
+    // The brief asked for the paintable face to be a single flat quad, and GPT delivered exactly
+    // that: a mesh whose depth is 0. Prefer those over the merely thin backing panels in front of
+    // them, or the video lands on the frame and the real screen stays blank.
     let best = null
-    let bestArea = 0
+    let bestScore = -1
     built.root.traverse((o) => {
       if (!o.isMesh || !o.geometry) return
       o.geometry.computeBoundingBox()
       const s = o.geometry.boundingBox.getSize(new THREE.Vector3())
+      if (s.z > 0.08) return
       const area = s.x * s.y
-      // a face, not a slab: thin in z, wide in x and y
-      if (s.z < 0.08 && area > bestArea) {
-        bestArea = area
+      const score = area + (s.z < 0.001 ? 1000 : 0)
+      if (score > bestScore) {
+        bestScore = score
         best = o
       }
     })
