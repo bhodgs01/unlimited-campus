@@ -1183,6 +1183,394 @@ export default function PIECES(THREE, CELL) {
     c.end();
     return {label:"Campus Info Kiosk",kind:'landmark'};
   },
+  coursehallfloor(c, rand) {
+    const C=(r,h,k,o={},n=20)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const T=(r,t,k,o={},arc=Math.PI*2)=>c.geom(new THREE.TorusGeometry(r,t,6,40,arc),k,o);
+    const rod=(a,b,r)=>{const p=new THREE.Vector3(...a),v=new THREE.Vector3(...b).sub(p);const g=new THREE.CylinderGeometry(r,r,v.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),v.clone().normalize())));p.addScaledVector(v,.5);g.translate(p.x,p.y,p.z);return g;};
+    const pack=(gs,k,o={})=>{const p=[],n=[];for(const src of gs){const g=src.index?src.toNonIndexed():src;p.push(...g.attributes.position.array);n.push(...g.attributes.normal.array);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(n,3));c.geom(g,k,o);};
+    // Full 20 m room, not a furniture footprint. Floor surface is exactly y=0.
+    C(5.9,.08,CELL.STONE,{y:-.04,label:'Smooth stone floor'},96);
+    const seams=[];
+    for(const r of [1.55,3.05,4.52,5.82]){const g=new THREE.TorusGeometry(r,.012,4,96);g.rotateX(Math.PI/2);g.translate(0,.001,0);seams.push(g);}
+    for(let i=0;i<24;i++){const a=i*Math.PI/12;seams.push(rod([1.55*Math.sin(a),.003,1.55*Math.cos(a)],[5.8*Math.sin(a),.003,5.8*Math.cos(a)],.007));}
+    pack(seams,CELL.STONE_DARK,{label:'Radial paving seams'});
+    T(5.30,.025,CELL.ACCENT2,{y:.016,rx:Math.PI/2,label:'Lime progress track'});
+    const markers=[];for(let i=0;i<9;i++){const a=i*Math.PI*2/9;const g=new THREE.CylinderGeometry(.095,.095,.012,6);g.translate(5.30*Math.sin(a),.01,5.30*Math.cos(a));markers.push(g);}pack(markers,CELL.METAL,{label:'Nine progress stops'});
+    const dark=[],light=[];
+    for(let i=0;i<8;i++){const a=i*Math.PI/4,L=i%2?1.0:1.35;for(const s of [-1,1]){const sh=new THREE.Shape();sh.moveTo(0,0);sh.lineTo(s*.17,.32);sh.lineTo(0,L);sh.closePath();const g=new THREE.ExtrudeGeometry(sh,{depth:.01,bevelEnabled:false});g.rotateX(-Math.PI/2);g.rotateY(a);g.translate(0,.007,0);(s<0?dark:light).push(g);}}
+    pack(dark,CELL.METAL_DARK,{label:'Compass rose'});pack(light,CELL.METAL);
+    C(.18,.025,CELL.ACCENT2,{y:.0125,label:'Compass hub'},12);
+    T(1.43,.018,CELL.METAL,{y:.011,rx:Math.PI/2,label:'Inlaid compass border'});
+    return { label: 'Course Hall Floor', kind: 'landmark' };
+  },
+  coursehallwall(c, rand) {
+    const C=(r,h,k,o={},n=20)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const E=(w,h,d,k,o={})=>{const g=new THREE.SphereGeometry(1,16,10);g.scale(w,h,d);c.geom(g,k,o);};
+    const bevel=(w,h,d,r=.025)=>{r=Math.min(r,w/4,h/4,d/4);const s=new THREE.Shape();s.moveTo(-w/2+r,-h/2+r);s.lineTo(w/2-r,-h/2+r);s.lineTo(w/2-r,h/2-r);s.lineTo(-w/2+r,h/2-r);s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d-2*r,bevelEnabled:true,bevelSegments:1,steps:1,bevelSize:r,bevelThickness:r,curveSegments:1});g.translate(0,0,-d/2+r);return g;};
+    const V=(w,h,d,k,o={},r=.025)=>c.geom(bevel(w,h,d,r),k,o);
+    const rod=(a,b,r)=>{const p=new THREE.Vector3(...a),v=new THREE.Vector3(...b).sub(p);const g=new THREE.CylinderGeometry(r,r,v.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),v.clone().normalize())));p.addScaledVector(v,.5);g.translate(p.x,p.y,p.z);return g;};
+    const pack=(gs,k,o={})=>{const p=[],n=[];for(const src of gs){const g=src.index?src.toNonIndexed():src;p.push(...g.attributes.position.array);n.push(...g.attributes.normal.array);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(n,3));c.geom(g,k,o);};
+    const block=(w,h,d,x=0,y=0,z=0)=>new THREE.BoxGeometry(w,h,d).translate(x,y,z);
+    // A 36-degree repeat on a 5.9-unit radius; local radial centre is (0,0,5.9).
+    const arc=(ri,ro,h,a,b,y)=>{const s=new THREE.Shape();s.moveTo(ri*Math.sin(a),ri*Math.cos(a));for(let j=0;j<=12;j++){const t=a+(b-a)*j/12;s.lineTo(ro*Math.sin(t),ro*Math.cos(t));}for(let j=12;j>=0;j--){const t=a+(b-a)*j/12;s.lineTo(ri*Math.sin(t),ri*Math.cos(t));}s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:h,bevelEnabled:false});g.rotateX(Math.PI/2);g.rotateY(Math.PI);g.translate(0,y+h,5.9);return g;};
+    c.geom(arc(5.68,6.04,4.1,-Math.PI/10,Math.PI/10,0),CELL.STONE_DARK,{label:'Curved wall core'});
+    for(let row=0;row<12;row++)for(let j=0;j<5;j++){const a=-Math.PI/10+j*Math.PI/25+.002,b=a+Math.PI/25-.004;c.geom(arc(5.665,6.055,.307,a,b,.06+row*.332),CELL.STONE,{label:row===0&&j===0?'Stone courses':undefined});}
+    for(const y of [.04,3.96])c.geom(arc(5.62,6.09,.10,-Math.PI/10,Math.PI/10,y),CELL.STONE,{label:y<1?'Plinth course':'Crown course'});
+    c.geom(arc(5.63,5.66,.065,-Math.PI/10,Math.PI/10,2.55),CELL.ACCENT,{emissive:.42,label:'Purple rune band'});
+    const runes=[];for(let i=-4;i<=4;i++){const x=i*.34;runes.push(block(.07,.12,.035,x,2.575,5.9-Math.sqrt(5.63*5.63-x*x)));}pack(runes,CELL.METAL_DARK);
+    V(.28,.54,.09,CELL.METAL_DARK,{y:1.92,z:.30,label:'Sconce backplate'});
+    c.geom(rod([0,1.73,.34],[0,1.73,.69],.045),CELL.METAL);
+    C(.18,.11,CELL.METAL,{y:1.79,z:.67},8);
+    E(.12,.24,.12,CELL.GLOW,{y:2.06,z:.67,emissive:.82,label:'Warm lantern'});
+    const cage=[];for(const x of [-.14,.14])cage.push(rod([x,1.84,.67],[x,2.29,.67],.018));pack(cage,CELL.METAL);
+    c.geom(new THREE.ConeGeometry(.21,.14,8),CELL.METAL,{y:2.32,z:.67,label:'Lantern hood'});
+    return { label: 'Course Hall Wall', kind: 'landmark' };
+  },
+  modulegate(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const E=(w,h,d,k,o={})=>{const g=new THREE.SphereGeometry(1,16,10);g.scale(w,h,d);c.geom(g,k,o);};
+    const bevel=(w,h,d,r=.025)=>{r=Math.min(r,w/4,h/4,d/4);const s=new THREE.Shape();s.moveTo(-w/2+r,-h/2+r);s.lineTo(w/2-r,-h/2+r);s.lineTo(w/2-r,h/2-r);s.lineTo(-w/2+r,h/2-r);s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d-2*r,bevelEnabled:true,bevelSegments:1,steps:1,bevelSize:r,bevelThickness:r,curveSegments:1});g.translate(0,0,-d/2+r);return g;};
+    const V=(w,h,d,k,o={},r=.025)=>c.geom(bevel(w,h,d,r),k,o);
+    const rod=(a,b,r)=>{const p=new THREE.Vector3(...a),v=new THREE.Vector3(...b).sub(p);const g=new THREE.CylinderGeometry(r,r,v.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),v.clone().normalize())));p.addScaledVector(v,.5);g.translate(p.x,p.y,p.z);return g;};
+    const pack=(gs,k,o={})=>{const p=[],n=[];for(const src of gs){const g=src.index?src.toNonIndexed():src;p.push(...g.attributes.position.array);n.push(...g.attributes.normal.array);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(n,3));c.geom(g,k,o);};
+    const block=(w,h,d,x=0,y=0,z=0)=>new THREE.BoxGeometry(w,h,d).translate(x,y,z);
+    // Clear opening: 1.10 wide and 1.285 high (about 2.2 m), including its arch.
+    for(const x of [-.73,.73]){V(.39,.16,.56,CELL.STONE_DARK,{x,y:.08,label:x<0?'Threshold piers':undefined});B(.32,.60,.40,CELL.STONE_DARK,{x,y:.45});for(let j=0;j<3;j++)V(.34,.18,.44,CELL.STONE,{x,y:.255+j*.195});V(.43,.11,.55,CELL.METAL,{x,y:.75});}
+    const arch=(ri,ro)=>{const s=new THREE.Shape();s.moveTo(ri,0);for(let j=0;j<=32;j++){const a=j*Math.PI/32;s.lineTo(ro*Math.cos(a),ro*Math.sin(a));}for(let j=32;j>=0;j--){const a=j*Math.PI/32;s.lineTo(ri*Math.cos(a),ri*Math.sin(a));}s.closePath();return new THREE.ExtrudeGeometry(s,{depth:.42,bevelEnabled:false}).translate(0,.75,-.21);};
+    c.geom(arch(.55,.92),CELL.STONE,{label:'Stone arch'});V(.72,.22,.46,CELL.STONE,{y:1.72,label:'Stepped crest'});V(.46,.29,.43,CELL.STONE,{y:1.94});
+    const joints=[];for(let i=1;i<9;i++){const a=i*Math.PI/9;joints.push(rod([.56*Math.cos(a),.75+.56*Math.sin(a),.214],[.91*Math.cos(a),.75+.91*Math.sin(a),.214],.011));}pack(joints,CELL.STONE_DARK);
+    V(1.87,.04,.59,CELL.STONE_DARK,{y:.02,label:'Sill'});
+    const veil=new THREE.Shape();veil.moveTo(-.535,.03);veil.lineTo(.535,.03);veil.lineTo(.535,.75);for(let j=0;j<=24;j++){const a=j*Math.PI/24;veil.lineTo(.535*Math.cos(a),.75+.535*Math.sin(a));}veil.closePath();
+    c.geom(new THREE.ExtrudeGeometry(veil,{depth:.015,bevelEnabled:false}),CELL.GLASS,{z:-.015,label:'Dim locked curtain'});
+    V(.30,.34,.18,CELL.METAL_DARK,{y:2.16,z:.20,label:'Dark keystone socket'});
+    c.group('gatelight',{y:2.16,z:.32});E(.105,.14,.05,CELL.ACCENT2,{emissive:.65,label:'Unlocked lime gem'});c.end();
+    c.group('curtain',{z:.025});const rays=[];for(let i=-4;i<=4;i++){const x=i*.108,h=.74+Math.sqrt(.535*.535-x*x)-.10;rays.push(block(.018,h,.012,x,h/2+.055,0));}pack(rays,CELL.ACCENT,{emissive:.40,label:'Shimmer curtain'});c.end();
+    V(.32,.20,.42,CELL.STONE,{y:2.37,z:0,label:'Gate crown'});
+    return { label: 'Module Gate', kind: 'hero', loop: 5,
+      pose(t, parts) {
+        // Engine hook: set parts.gatelight.userData.locked = true to lock this module.
+        const locked=parts.gatelight.userData.locked===true;
+        parts.gatelight.position.z=locked?.08:.32;
+        parts.curtain.position.z=locked?-.007:.025;
+        parts.curtain.position.y=locked?0:.012*Math.sin(t*Math.PI*2);
+      } };
+  },
+  modulegatenumber(c, rand) {
+    const C=(r,h,k,o={},n=20)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const T=(r,t,k,o={},arc=Math.PI*2)=>c.geom(new THREE.TorusGeometry(r,t,6,40,arc),k,o);
+    const bevel=(w,h,d,r=.025)=>{r=Math.min(r,w/4,h/4,d/4);const s=new THREE.Shape();s.moveTo(-w/2+r,-h/2+r);s.lineTo(w/2-r,-h/2+r);s.lineTo(w/2-r,h/2-r);s.lineTo(-w/2+r,h/2-r);s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d-2*r,bevelEnabled:true,bevelSegments:1,steps:1,bevelSize:r,bevelThickness:r,curveSegments:1});g.translate(0,0,-d/2+r);return g;};
+    const V=(w,h,d,k,o={},r=.025)=>c.geom(bevel(w,h,d,r),k,o);
+    const rod=(a,b,r)=>{const p=new THREE.Vector3(...a),v=new THREE.Vector3(...b).sub(p);const g=new THREE.CylinderGeometry(r,r,v.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),v.clone().normalize())));p.addScaledVector(v,.5);g.translate(p.x,p.y,p.z);return g;};
+    const pack=(gs,k,o={})=>{const p=[],n=[];for(const src of gs){const g=src.index?src.toNonIndexed():src;p.push(...g.attributes.position.array);n.push(...g.attributes.normal.array);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(n,3));c.geom(g,k,o);};
+    const block=(w,h,d,x=0,y=0,z=0)=>new THREE.BoxGeometry(w,h,d).translate(x,y,z);
+    // Seed chooses 1..9. The physical numeral is the sole text-geometry exception.
+    const digit=1+Math.floor(rand()*9);
+    V(.66,.12,.46,CELL.STONE,{y:.06});C(.045,2.40,CELL.METAL,{x:-.29,y:1.28},10);
+    c.geom(rod([-.29,2.48,0],[.44,2.48,0],.038),CELL.METAL);
+    c.group('plaque',{x:.13,y:2.40});
+    for(const x of [-.19,.19])T(.055,.015,CELL.METAL,{x,y:-.035});
+    V(.68,.70,.14,CELL.WOOD,{y:-.48});V(.55,.57,.025,CELL.ACCENT,{y:-.48,z:.083});
+    const segs={a:[0,-.26,.22,.046],b:[.13,-.36,.047,.17],c:[.13,-.58,.047,.17],d:[0,-.69,.22,.046],e:[-.13,-.58,.047,.17],f:[-.13,-.36,.047,.17],g:[0,-.475,.22,.047]};
+    const lit=['','bc','abged','abgcd','fgbc','afgcd','afgecd','abc','abcdefg','abfgcd'][digit];
+    const glyph=[];for(const id of lit){const [x,y,w,h]=segs[id];glyph.push(block(w,h,.024,x,y,.107));}pack(glyph,CELL.LIGHT);
+    const studs=[];for(const x of [-.27,.27])for(const y of [-.20,-.76])studs.push(new THREE.SphereGeometry(.025,8,6).translate(x,y,.08));pack(studs,CELL.METAL);
+    c.end();
+    return { label: 'Module Plaque', kind: 'hero', loop: 6, pose(t, parts) { parts.plaque.rotation.z=.055*Math.sin(t*Math.PI*2); } };
+  },
+  conciergedais(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=20)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const T=(r,t,k,o={},arc=Math.PI*2)=>c.geom(new THREE.TorusGeometry(r,t,6,40,arc),k,o);
+    const bevel=(w,h,d,r=.025)=>{r=Math.min(r,w/4,h/4,d/4);const s=new THREE.Shape();s.moveTo(-w/2+r,-h/2+r);s.lineTo(w/2-r,-h/2+r);s.lineTo(w/2-r,h/2-r);s.lineTo(-w/2+r,h/2-r);s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d-2*r,bevelEnabled:true,bevelSegments:1,steps:1,bevelSize:r,bevelThickness:r,curveSegments:1});g.translate(0,0,-d/2+r);return g;};
+    const V=(w,h,d,k,o={},r=.025)=>c.geom(bevel(w,h,d,r),k,o);
+    const pack=(gs,k,o={})=>{const p=[],n=[];for(const src of gs){const g=src.index?src.toNonIndexed():src;p.push(...g.attributes.position.array);n.push(...g.attributes.normal.array);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(n,3));c.geom(g,k,o);};
+    C(1.55,.08,CELL.STONE_DARK,{y:.04,label:'Dais foundation'},48);
+    C(1.39,.22,CELL.STONE,{y:.19,label:'Guide stage'},48);
+    T(1.40,.028,CELL.ACCENT2,{y:.268,rx:Math.PI/2,emissive:.45,label:'Lime stage rim'});
+    for(const s of [-1,1]){V(.90,.10,.34,CELL.STONE,{y:.05,z:s*1.69,label:s>0?'Front step':'Rear step'});V(.90,.20,.29,CELL.STONE,{y:.10,z:s*1.45});}
+    C(.49,.018,CELL.METAL,{y:.309,label:'Guide marker'},12);
+    for(const x of [-1.05,1.05]){C(.11,.08,CELL.METAL,{x,y:.34,z:-.75});C(.025,1.62,CELL.METAL,{x,y:1.13,z:-.75});B(.57,.045,.045,CELL.METAL,{x,y:1.88,z:-.75});V(.49,.82,.035,CELL.CLOTH,{x,y:1.43,z:-.75});V(.19,.25,.035,CELL.ACCENT,{x,y:1.49,z:-.716});}
+    const studs=[];for(let i=0;i<16;i++){const a=i*Math.PI/8;studs.push(new THREE.SphereGeometry(.025,8,6).translate(1.38*Math.sin(a),.16,1.38*Math.cos(a)));}pack(studs,CELL.METAL);
+    return { label: 'Concierge Dais', kind: 'landmark' };
+  },
+  hallbanner(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=20)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const E=(w,h,d,k,o={})=>{const g=new THREE.SphereGeometry(1,16,10);g.scale(w,h,d);c.geom(g,k,o);};
+    const bevel=(w,h,d,r=.025)=>{r=Math.min(r,w/4,h/4,d/4);const s=new THREE.Shape();s.moveTo(-w/2+r,-h/2+r);s.lineTo(w/2-r,-h/2+r);s.lineTo(w/2-r,h/2-r);s.lineTo(-w/2+r,h/2-r);s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d-2*r,bevelEnabled:true,bevelSegments:1,steps:1,bevelSize:r,bevelThickness:r,curveSegments:1});g.translate(0,0,-d/2+r);return g;};
+    const V=(w,h,d,k,o={},r=.025)=>c.geom(bevel(w,h,d,r),k,o);
+    const pack=(gs,k,o={})=>{const p=[],n=[];for(const src of gs){const g=src.index?src.toNonIndexed():src;p.push(...g.attributes.position.array);n.push(...g.attributes.normal.array);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(n,3));c.geom(g,k,o);};
+    const block=(w,h,d,x=0,y=0,z=0)=>new THREE.BoxGeometry(w,h,d).translate(x,y,z);
+    C(.28,.12,CELL.STONE,{y:.06},10);C(.08,.10,CELL.METAL,{y:.17},10);C(.028,2.29,CELL.METAL,{y:1.265},10);
+    E(.065,.10,.065,CELL.ACCENT2,{y:2.48});B(.94,.04,.04,CELL.METAL,{y:2.27});
+    c.group('cloth',{y:2.24});
+    const panels=[];for(let i=0;i<6;i++){const x=-.375+i*.15;panels.push(block(.151,1.26,.04,x,-.64,.04*Math.cos(i*1.3)));}pack(panels,CELL.CLOTH);
+    for(const x of [-.405,.405])B(.045,1.30,.055,CELL.ACCENT,{x,y:-.64,z:.02});
+    V(.38,.47,.055,CELL.ACCENT,{y:-.48,z:.08});c.geom(new THREE.CylinderGeometry(.105,.105,.035,6).rotateX(Math.PI/2),CELL.ACCENT2,{y:-.48,z:.125});
+    const fringe=[];for(let i=0;i<9;i++)fringe.push(block(.055,.13,.035,-.36+i*.09,-1.34,0));pack(fringe,CELL.METAL);
+    c.end();
+    return { label: 'Hall Banner', kind: 'hero', loop: 7, pose(t, parts) { parts.cloth.rotation.x=.025*Math.sin(t*Math.PI*2); parts.cloth.rotation.z=.018*Math.sin(t*Math.PI*2); } };
+  },
+  hallbrazier(c, rand) {
+    const C=(r,h,k,o={},n=20)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const T=(r,t,k,o={},arc=Math.PI*2)=>c.geom(new THREE.TorusGeometry(r,t,6,40,arc),k,o);
+    const rod=(a,b,r)=>{const p=new THREE.Vector3(...a),v=new THREE.Vector3(...b).sub(p);const g=new THREE.CylinderGeometry(r,r,v.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),v.clone().normalize())));p.addScaledVector(v,.5);g.translate(p.x,p.y,p.z);return g;};
+    const pack=(gs,k,o={})=>{const p=[],n=[];for(const src of gs){const g=src.index?src.toNonIndexed():src;p.push(...g.attributes.position.array);n.push(...g.attributes.normal.array);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(n,3));c.geom(g,k,o);};
+    C(.35,.13,CELL.STONE,{y:.065},10);C(.23,.10,CELL.METAL_DARK,{y:.18},10);C(.075,.75,CELL.METAL,{y:.605},10);
+    C(.15,.09,CELL.ACCENT,{y:.46},10);
+    c.geom(new THREE.CylinderGeometry(.31,.14,.26,12),CELL.METAL_DARK,{y:1.09});T(.31,.033,CELL.METAL,{y:1.22,rx:Math.PI/2});
+    const cage=[];for(let i=0;i<6;i++){const a=i*Math.PI/3;cage.push(rod([.26*Math.sin(a),1.13,.26*Math.cos(a)],[.34*Math.sin(a),1.43,.34*Math.cos(a)],.026));}pack(cage,CELL.METAL);
+    c.group('flame',{y:1.19});
+    const flame=new THREE.LatheGeometry([[0,0],[.10,.04],[.13,.13],[.075,.26],[.035,.34],[0,.44]].map(p=>new THREE.Vector2(...p)),12);c.geom(flame,CELL.GLOW,{emissive:.95});
+    c.geom(new THREE.ConeGeometry(.12,.31,9),CELL.GLOW,{y:.17,emissive:.65});c.end();
+    return { label: 'Hall Brazier', kind: 'hero', loop: 2.4, pose(t, parts) { parts.flame.rotation.y=.13*Math.sin(t*Math.PI*2); parts.flame.position.y=1.19+.012*Math.sin(t*Math.PI*6); } };
+  },
+  progresspillar(c, rand) {
+    const C=(r,h,k,o={},n=20)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const E=(w,h,d,k,o={})=>{const g=new THREE.SphereGeometry(1,16,10);g.scale(w,h,d);c.geom(g,k,o);};
+    const pack=(gs,k,o={})=>{const p=[],n=[];for(const src of gs){const g=src.index?src.toNonIndexed():src;p.push(...g.attributes.position.array);n.push(...g.attributes.normal.array);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(n,3));c.geom(g,k,o);};
+    C(1.50,.06,CELL.STONE,{y:.03,label:'Progress plaza'},32);C(.53,.14,CELL.STONE_DARK,{y:.07,label:'Octagonal footing'},8);C(.38,2.10,CELL.STONE,{y:1.19,label:'Stone score spine'},12);
+    const complete=3+Math.floor(rand()*4),lights=[];
+    for(let i=0;i<9;i++){const y=.30+i*.225;C(.46,.145,CELL.METAL_DARK,{y,label:i===0?'Nine module rings':undefined},24);const g=new THREE.TorusGeometry(.463,.027,6,32);g.rotateX(Math.PI/2);g.translate(0,y,0);if(i<complete)lights.push(g);else c.geom(g,CELL.STONE_DARK);}
+    pack(lights,CELL.ACCENT2,{emissive:.55,label:'Completed modules'});
+    C(.45,.12,CELL.METAL,{y:2.29,label:'Crown'},12);E(.15,.08,.15,CELL.ACCENT,{y:2.42,emissive:.4,label:'Beacon'});
+    return { label: 'Progress Pillar', kind: 'landmark' };
+  },
+  cinemawall(c, rand) {
+    const bevel=(w,h,d,r=.025)=>{r=Math.min(r,w/4,h/4,d/4);const s=new THREE.Shape();s.moveTo(-w/2+r,-h/2+r);s.lineTo(w/2-r,-h/2+r);s.lineTo(w/2-r,h/2-r);s.lineTo(-w/2+r,h/2-r);s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d-2*r,bevelEnabled:true,bevelSegments:1,steps:1,bevelSize:r,bevelThickness:r,curveSegments:1});g.translate(0,0,-d/2+r);return g;};
+    const V=(w,h,d,k,o={},r=.025)=>c.geom(bevel(w,h,d,r),k,o);
+    const pack=(gs,k,o={})=>{const p=[],n=[];for(const src of gs){const g=src.index?src.toNonIndexed():src;p.push(...g.attributes.position.array);n.push(...g.attributes.normal.array);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(n,3));c.geom(g,k,o);};
+    const block=(w,h,d,x=0,y=0,z=0)=>new THREE.BoxGeometry(w,h,d).translate(x,y,z);
+    const quad=(w,h,y,k,up=false)=>{const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute([-w/2,-h/2,0,w/2,-h/2,0,w/2,h/2,0,-w/2,h/2,0],3));g.setAttribute('uv',new THREE.Float32BufferAttribute([0,0,1,0,1,1,0,1],2));g.setIndex([0,1,2,0,2,3]);g.computeVertexNormals();if(up)g.rotateX(-Math.PI/2);c.geom(g,k,{y,label:'Media surface'});};
+    V(4.8,.18,.80,CELL.STONE_DARK,{y:.09});V(4.60,2.40,.25,CELL.STONE,{y:1.38,z:-.25});
+    V(4.18,2.09,.065,CELL.METAL,{y:1.45,z:-.09});V(3.96,1.87,.06,CELL.GLOW,{y:1.45,z:-.049,emissive:.60});
+    // Centre of the blank face: (0,1.45,0); its local UVs cover exactly 0..1.
+    quad(3.80,1.70,1.45,CELL.GLASS);
+    for(const x of [-2.21,2.21]){V(.19,2.12,.29,CELL.STONE_DARK,{x,y:1.31,z:-.065});V(.11,.51,.03,CELL.METAL_DARK,{x,y:.67,z:.095});}
+    const bolts=[];for(const x of [-2.08,2.08])for(const y of [.43,2.48])bolts.push(new THREE.SphereGeometry(.034,8,6).translate(x,y,-.045));pack(bolts,CELL.METAL);
+    const rear=[];for(const x of [-1.9,0,1.9])rear.push(block(.08,1.92,.045,x,1.39,-.398));pack(rear,CELL.METAL_DARK);
+    V(1.1,.085,.12,CELL.ACCENT,{y:2.64,z:-.22});
+    return { label: 'Cinema Wall', kind: 'landmark' };
+  },
+  listeningbench(c, rand) {
+    const C=(r,h,k,o={},n=20)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const T=(r,t,k,o={},arc=Math.PI*2)=>c.geom(new THREE.TorusGeometry(r,t,6,40,arc),k,o);
+    const bevel=(w,h,d,r=.025)=>{r=Math.min(r,w/4,h/4,d/4);const s=new THREE.Shape();s.moveTo(-w/2+r,-h/2+r);s.lineTo(w/2-r,-h/2+r);s.lineTo(w/2-r,h/2-r);s.lineTo(-w/2+r,h/2-r);s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d-2*r,bevelEnabled:true,bevelSegments:1,steps:1,bevelSize:r,bevelThickness:r,curveSegments:1});g.translate(0,0,-d/2+r);return g;};
+    const V=(w,h,d,k,o={},r=.025)=>c.geom(bevel(w,h,d,r),k,o);
+    const rod=(a,b,r)=>{const p=new THREE.Vector3(...a),v=new THREE.Vector3(...b).sub(p);const g=new THREE.CylinderGeometry(r,r,v.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),v.clone().normalize())));p.addScaledVector(v,.5);g.translate(p.x,p.y,p.z);return g;};
+    const pack=(gs,k,o={})=>{const p=[],n=[];for(const src of gs){const g=src.index?src.toNonIndexed():src;p.push(...g.attributes.position.array);n.push(...g.attributes.normal.array);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(n,3));c.geom(g,k,o);};
+    const block=(w,h,d,x=0,y=0,z=0)=>new THREE.BoxGeometry(w,h,d).translate(x,y,z);
+    // Three seat cushions at 0.265 units (0.45 m). A curved, double-sided timber back.
+    const supports=[],backs=[],seams=[];
+    for(let i=-1;i<=1;i++){const a=i*.18,x=i*.60,z=Math.abs(i)*.10;
+      V(.56,.095,.59,CELL.CLOTH,{x,y:.215,z,ry:-a},.04);
+      const back=bevel(.59,.39,.10,.025);back.rotateY(-a);back.translate(x,.43,z-.285);backs.push(back);
+      for(const dx of [-.20,.20])supports.push(block(.08,.16,.39,x+dx,.08,z));
+      seams.push(rod([x-.22,.265,z-.22],[x+.22,.265,z-.22],.008));}
+    pack(supports,CELL.WOOD);pack(backs,CELL.WOOD);pack(seams,CELL.METAL);
+    for(const s of [-1,1]){V(.12,.28,.52,CELL.WOOD,{x:s*.94,y:.28,z:.08});C(.03,.48,CELL.METAL,{x:s*1.12,y:.24,z:-.06},10);
+      const horn=new THREE.CylinderGeometry(.16,.05,.23,16,true);horn.rotateX(Math.PI/2);c.geom(horn,CELL.METAL,{x:s*1.12,y:.54,z:.035});
+      C(.145,.025,CELL.METAL_DARK,{x:s*1.12,y:.54,z:.16,rx:Math.PI/2},16);T(.158,.021,CELL.ACCENT2,{x:s*1.12,y:.54,z:.172});}
+
+    return { label: 'Listening Bench', kind: 'landmark' };
+  },
+  beanbagcluster(c, rand) {
+    const E=(w,h,d,k,o={})=>{const g=new THREE.SphereGeometry(1,16,10);g.scale(w,h,d);c.geom(g,k,o);};
+    const bevel=(w,h,d,r=.025)=>{r=Math.min(r,w/4,h/4,d/4);const s=new THREE.Shape();s.moveTo(-w/2+r,-h/2+r);s.lineTo(w/2-r,-h/2+r);s.lineTo(w/2-r,h/2-r);s.lineTo(-w/2+r,h/2-r);s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d-2*r,bevelEnabled:true,bevelSegments:1,steps:1,bevelSize:r,bevelThickness:r,curveSegments:1});g.translate(0,0,-d/2+r);return g;};
+    const V=(w,h,d,k,o={},r=.025)=>c.geom(bevel(w,h,d,r),k,o);
+    const pack=(gs,k,o={})=>{const p=[],n=[];for(const src of gs){const g=src.index?src.toNonIndexed():src;p.push(...g.attributes.position.array);n.push(...g.attributes.normal.array);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(n,3));c.geom(g,k,o);};
+    const block=(w,h,d,x=0,y=0,z=0)=>new THREE.BoxGeometry(w,h,d).translate(x,y,z);
+    const tube=(points,r=.025)=>new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(...p))),24,r,8,false);
+    V(2.42,.025,1.80,CELL.CLOTH,{y:.0125},.006);
+    const positions=[[-.68,-.35,0],[.68,-.30,.3],[0,.48,-.15]];
+    for(let i=0;i<3;i++){const [x,z,a]=positions[i],k=[CELL.ACCENT,CELL.ACCENT2,CELL.CLOTH][i];
+      E(.42,.20,.40,k,{x,y:.22,z,ry:a});E(.36,.23,.20,k,{x,y:.32,z:z-.24,ry:a});
+      E(.28,.045,.26,CELL.CLOTH,{x,y:.365,z:z+.05});
+      const seam=tube([[x-.34,.23,z+.18],[x,.10,z+.39],[x+.34,.23,z+.18]],.009);c.geom(seam,CELL.METAL_DARK);
+      V(.08,.024,.10,CELL.WOOD,{x:x+.28,y:.25,z:z+.28});}
+    const rugSeam=[];for(const x of [-1.15,1.15])rugSeam.push(block(.018,.008,1.63,x,.028,0));pack(rugSeam,CELL.LIGHT);
+    return { label: 'Beanbag Cluster', kind: 'landmark' };
+  },
+  infographicwall(c, rand) {
+    const bevel=(w,h,d,r=.025)=>{r=Math.min(r,w/4,h/4,d/4);const s=new THREE.Shape();s.moveTo(-w/2+r,-h/2+r);s.lineTo(w/2-r,-h/2+r);s.lineTo(w/2-r,h/2-r);s.lineTo(-w/2+r,h/2-r);s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d-2*r,bevelEnabled:true,bevelSegments:1,steps:1,bevelSize:r,bevelThickness:r,curveSegments:1});g.translate(0,0,-d/2+r);return g;};
+    const V=(w,h,d,k,o={},r=.025)=>c.geom(bevel(w,h,d,r),k,o);
+    const rod=(a,b,r)=>{const p=new THREE.Vector3(...a),v=new THREE.Vector3(...b).sub(p);const g=new THREE.CylinderGeometry(r,r,v.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),v.clone().normalize())));p.addScaledVector(v,.5);g.translate(p.x,p.y,p.z);return g;};
+    const pack=(gs,k,o={})=>{const p=[],n=[];for(const src of gs){const g=src.index?src.toNonIndexed():src;p.push(...g.attributes.position.array);n.push(...g.attributes.normal.array);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(n,3));c.geom(g,k,o);};
+    const quad=(w,h,y,k,up=false)=>{const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute([-w/2,-h/2,0,w/2,-h/2,0,w/2,h/2,0,-w/2,h/2,0],3));g.setAttribute('uv',new THREE.Float32BufferAttribute([0,0,1,0,1,1,0,1],2));g.setIndex([0,1,2,0,2,3]);g.computeVertexNormals();if(up)g.rotateX(-Math.PI/2);c.geom(g,k,{y,label:'Media surface'});};
+    // Leaning stone support; media remains perfectly vertical and front-facing.
+    V(3.60,.16,.92,CELL.STONE_DARK,{y:.08});
+    for(const x of [-1.43,1.43])c.geom(rod([x,.16,-.32],[x,2.34,-.58],.11),CELL.STONE);
+    V(3.26,2.01,.19,CELL.WOOD,{y:1.40,z:-.19});V(3.07,1.82,.085,CELL.METAL,{y:1.40,z:-.065});
+    quad(2.83,1.58,1.40,CELL.LIGHT);
+    V(3.13,.085,.13,CELL.ACCENT,{y:2.42,z:-.14,emissive:.35});
+    V(2.34,.10,.43,CELL.STONE,{y:.05,z:.65});
+    const bolts=[];for(const x of [-1.52,1.52])for(const y of [.51,2.29])bolts.push(new THREE.SphereGeometry(.032,8,6).translate(x,y,-.008));pack(bolts,CELL.METAL);
+    V(2.76,.10,.08,CELL.METAL_DARK,{y:1.07,z:-.63});
+    return { label: 'Infographic Wall', kind: 'landmark' };
+  },
+  readerlectern(c, rand) {
+    const C=(r,h,k,o={},n=20)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const bevel=(w,h,d,r=.025)=>{r=Math.min(r,w/4,h/4,d/4);const s=new THREE.Shape();s.moveTo(-w/2+r,-h/2+r);s.lineTo(w/2-r,-h/2+r);s.lineTo(w/2-r,h/2-r);s.lineTo(-w/2+r,h/2-r);s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d-2*r,bevelEnabled:true,bevelSegments:1,steps:1,bevelSize:r,bevelThickness:r,curveSegments:1});g.translate(0,0,-d/2+r);return g;};
+    const V=(w,h,d,k,o={},r=.025)=>c.geom(bevel(w,h,d,r),k,o);
+    const pack=(gs,k,o={})=>{const p=[],n=[];for(const src of gs){const g=src.index?src.toNonIndexed():src;p.push(...g.attributes.position.array);n.push(...g.attributes.normal.array);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(n,3));c.geom(g,k,o);};
+    const block=(w,h,d,x=0,y=0,z=0)=>new THREE.BoxGeometry(w,h,d).translate(x,y,z);
+    const tube=(points,r=.025)=>new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(...p))),24,r,8,false);
+    const quad=(w,h,y,k,up=false)=>{const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute([-w/2,-h/2,0,w/2,-h/2,0,w/2,h/2,0,-w/2,h/2,0],3));g.setAttribute('uv',new THREE.Float32BufferAttribute([0,0,1,0,1,1,0,1],2));g.setIndex([0,1,2,0,2,3]);g.computeVertexNormals();if(up)g.rotateX(-Math.PI/2);c.geom(g,k,{y,label:'Media surface'});};
+    V(.76,.12,.64,CELL.STONE,{y:.06});C(.105,.52,CELL.WOOD,{y:.38},10);
+    V(.98,.09,.74,CELL.WOOD,{y:.675,z:0});V(.91,.04,.64,CELL.ACCENT,{y:.737,z:0});
+    V(.85,.075,.58,CELL.LIGHT,{y:.783,z:0});
+    // Continuous paintable open-page spread, intentionally facing UP, not +z.
+    quad(.83,.56,.824,CELL.LIGHT,true);
+    const pageEdges=[];for(const y of [.766,.785,.805])pageEdges.push(block(.845,.004,.005,0,y,.291));pack(pageEdges,CELL.STONE_DARK);
+    c.geom(tube([[.39,.71,-.25],[.50,1.03,-.29],[.34,1.22,-.16],[.14,1.17,-.10]],.024),CELL.METAL);
+    c.geom(new THREE.ConeGeometry(.11,.12,12),CELL.METAL,{x:.14,y:1.125,z:-.10});C(.082,.015,CELL.GLOW,{x:.14,y:1.063,z:-.10,emissive:.72},12);
+    for(const x of [-.35,.35])V(.08,.035,.68,CELL.METAL,{x,y:.64});
+    return { label: 'Reader Lectern', kind: 'landmark' };
+  },
+  podcaststand(c, rand) {
+    const C=(r,h,k,o={},n=20)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const T=(r,t,k,o={},arc=Math.PI*2)=>c.geom(new THREE.TorusGeometry(r,t,6,40,arc),k,o);
+    const bevel=(w,h,d,r=.025)=>{r=Math.min(r,w/4,h/4,d/4);const s=new THREE.Shape();s.moveTo(-w/2+r,-h/2+r);s.lineTo(w/2-r,-h/2+r);s.lineTo(w/2-r,h/2-r);s.lineTo(-w/2+r,h/2-r);s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d-2*r,bevelEnabled:true,bevelSegments:1,steps:1,bevelSize:r,bevelThickness:r,curveSegments:1});g.translate(0,0,-d/2+r);return g;};
+    const V=(w,h,d,k,o={},r=.025)=>c.geom(bevel(w,h,d,r),k,o);
+    const rod=(a,b,r)=>{const p=new THREE.Vector3(...a),v=new THREE.Vector3(...b).sub(p);const g=new THREE.CylinderGeometry(r,r,v.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),v.clone().normalize())));p.addScaledVector(v,.5);g.translate(p.x,p.y,p.z);return g;};
+    const pack=(gs,k,o={})=>{const p=[],n=[];for(const src of gs){const g=src.index?src.toNonIndexed():src;p.push(...g.attributes.position.array);n.push(...g.attributes.normal.array);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(n,3));c.geom(g,k,o);};
+    const block=(w,h,d,x=0,y=0,z=0)=>new THREE.BoxGeometry(w,h,d).translate(x,y,z);
+    const tube=(points,r=.025)=>new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(...p))),24,r,8,false);
+    C(.30,.09,CELL.STONE_DARK,{y:.045},12);C(.055,.91,CELL.METAL,{y:.545},12);C(.083,.09,CELL.ACCENT2,{y:.56},12);
+    V(.24,.37,.19,CELL.METAL_DARK,{y:1.12},.04);V(.19,.26,.025,CELL.METAL,{y:1.14,z:.107},.006);
+    const grille=[];for(let j=0;j<6;j++)grille.push(block(.155,.010,.012,0,1.04+j*.038,.126));pack(grille,CELL.METAL_DARK);
+    c.geom(rod([.04,.84,0],[.32,.84,0],.024),CELL.METAL);C(.025,.08,CELL.METAL,{x:.32,y:.86},8);
+    c.group('headphones',{x:.31,y:.79});
+    T(.145,.025,CELL.METAL,{y:-.08},Math.PI);
+    for(const s of [-1,1]){V(.075,.16,.12,CELL.ACCENT,{x:s*.145,y:-.16});V(.035,.13,.10,CELL.CLOTH,{x:s*.104,y:-.16});}c.end();
+    c.geom(tube([[0,.97,-.10],[.12,.73,-.13],[.10,.29,-.08],[0,.10,0]],.009),CELL.METAL_DARK);
+    return { label: 'Podcast Stand', kind: 'hero', loop: 5, pose(t, parts) { parts.headphones.position.y=.79+.013*Math.sin(t*Math.PI*2); } };
+  },
+  questplinth(c, rand) {
+    const C=(r,h,k,o={},n=20)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const T=(r,t,k,o={},arc=Math.PI*2)=>c.geom(new THREE.TorusGeometry(r,t,6,40,arc),k,o);
+    const bevel=(w,h,d,r=.025)=>{r=Math.min(r,w/4,h/4,d/4);const s=new THREE.Shape();s.moveTo(-w/2+r,-h/2+r);s.lineTo(w/2-r,-h/2+r);s.lineTo(w/2-r,h/2-r);s.lineTo(-w/2+r,h/2-r);s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d-2*r,bevelEnabled:true,bevelSegments:1,steps:1,bevelSize:r,bevelThickness:r,curveSegments:1});g.translate(0,0,-d/2+r);return g;};
+    const V=(w,h,d,k,o={},r=.025)=>c.geom(bevel(w,h,d,r),k,o);
+    const rod=(a,b,r)=>{const p=new THREE.Vector3(...a),v=new THREE.Vector3(...b).sub(p);const g=new THREE.CylinderGeometry(r,r,v.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),v.clone().normalize())));p.addScaledVector(v,.5);g.translate(p.x,p.y,p.z);return g;};
+    const pack=(gs,k,o={})=>{const p=[],n=[];for(const src of gs){const g=src.index?src.toNonIndexed():src;p.push(...g.attributes.position.array);n.push(...g.attributes.normal.array);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(n,3));c.geom(g,k,o);};
+    C(.49,.12,CELL.STONE_DARK,{y:.06},8);C(.36,.34,CELL.STONE,{y:.29},8);C(.48,.095,CELL.METAL,{y:.5075},8);
+    C(.315,.014,CELL.BLACK,{y:.559},24);T(.33,.027,CELL.ACCENT2,{y:.565,rx:Math.PI/2});
+    c.group('socketlight',{y:.565});T(.285,.013,CELL.ACCENT2,{rx:Math.PI/2,emissive:.75});c.end();
+    for(let i=0;i<4;i++){const a=i*Math.PI/2;V(.10,.08,.07,CELL.METAL_DARK,{x:.37*Math.sin(a),y:.59,z:.37*Math.cos(a),ry:a});}
+    const ribs=[];for(let i=0;i<8;i++){const a=i*Math.PI/4;ribs.push(rod([.336*Math.sin(a),.17,.336*Math.cos(a)],[.336*Math.sin(a),.42,.336*Math.cos(a)],.012));}pack(ribs,CELL.METAL);
+
+    return { label: 'Quest Plinth', kind: 'hero', loop: 3, pose(t, parts) { parts.socketlight.position.y=.565; parts.socketlight.scale.setScalar(.92+.08*(1-Math.cos(t*Math.PI*2))); } };
+  },
+  gratitudeglobe(c, rand) {
+    const C=(r,h,k,o={},n=20)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const T=(r,t,k,o={},arc=Math.PI*2)=>c.geom(new THREE.TorusGeometry(r,t,6,40,arc),k,o);
+    const E=(w,h,d,k,o={})=>{const g=new THREE.SphereGeometry(1,16,10);g.scale(w,h,d);c.geom(g,k,o);};
+    const rod=(a,b,r)=>{const p=new THREE.Vector3(...a),v=new THREE.Vector3(...b).sub(p);const g=new THREE.CylinderGeometry(r,r,v.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),v.clone().normalize())));p.addScaledVector(v,.5);g.translate(p.x,p.y,p.z);return g;};
+    const pack=(gs,k,o={})=>{const p=[],n=[];for(const src of gs){const g=src.index?src.toNonIndexed():src;p.push(...g.attributes.position.array);n.push(...g.attributes.normal.array);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(n,3));c.geom(g,k,o);};
+    C(.40,.12,CELL.STONE,{y:.06},12);C(.09,.28,CELL.METAL,{y:.25},12);C(.23,.08,CELL.WOOD,{y:.43},12);
+    // Spin about the globe's own centre, not its floor origin.
+    c.group('world',{y:.91});E(.43,.43,.43,CELL.GLASS);
+    const land=[];for(const [a,b,w,h] of [[-.7,.4,.17,.13],[.5,.6,.16,.11],[1.6,-.3,.19,.12],[-1.9,-.4,.11,.17],[2.7,.55,.15,.09]]){const v=new THREE.Vector3(Math.sin(a)*Math.cos(b),Math.sin(b),Math.cos(a)*Math.cos(b));const g=new THREE.SphereGeometry(1,9,6);g.scale(w,h,.025);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,0,1),v)));g.translate(v.x*.425,v.y*.425,v.z*.425);land.push(g);}pack(land,CELL.LEAF);
+    const rims=[],holes=[],pins=[];
+    for(let i=0;i<10;i++){const a=i*Math.PI*2/10,b=(i%2?.25:-.27),v=new THREE.Vector3(Math.sin(a)*Math.cos(b),Math.sin(b),Math.cos(a)*Math.cos(b)),m=new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,0,1),v));
+      const r=new THREE.TorusGeometry(.039,.008,5,12);r.applyMatrix4(m);r.translate(v.x*.442,v.y*.442,v.z*.442);rims.push(r);
+      const h=new THREE.CylinderGeometry(.030,.030,.012,12);h.rotateX(Math.PI/2);h.applyMatrix4(m);h.translate(v.x*.439,v.y*.439,v.z*.439);holes.push(h);
+      if(i<3){pins.push(rod(v.clone().multiplyScalar(.44).toArray(),v.clone().multiplyScalar(.54).toArray(),.014));const head=new THREE.SphereGeometry(.045,10,7);head.translate(v.x*.56,v.y*.56,v.z*.56);pins.push(head);}}
+    pack(rims,CELL.METAL);pack(holes,CELL.BLACK);pack(pins,CELL.ACCENT2);
+    c.end();T(.49,.024,CELL.METAL,{y:.91,rz:.2});
+
+    return { label: 'Gratitude Globe', kind: 'hero', loop: 36, pose(t, parts) { parts.world.rotation.y=t*Math.PI*2; } };
+  },
+  gratitudejournal(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const E=(w,h,d,k,o={})=>{const g=new THREE.SphereGeometry(1,16,10);g.scale(w,h,d);c.geom(g,k,o);};
+    const bevel=(w,h,d,r=.025)=>{r=Math.min(r,w/4,h/4,d/4);const s=new THREE.Shape();s.moveTo(-w/2+r,-h/2+r);s.lineTo(w/2-r,-h/2+r);s.lineTo(w/2-r,h/2-r);s.lineTo(-w/2+r,h/2-r);s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d-2*r,bevelEnabled:true,bevelSegments:1,steps:1,bevelSize:r,bevelThickness:r,curveSegments:1});g.translate(0,0,-d/2+r);return g;};
+    const V=(w,h,d,k,o={},r=.025)=>c.geom(bevel(w,h,d,r),k,o);
+    const rod=(a,b,r)=>{const p=new THREE.Vector3(...a),v=new THREE.Vector3(...b).sub(p);const g=new THREE.CylinderGeometry(r,r,v.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),v.clone().normalize())));p.addScaledVector(v,.5);g.translate(p.x,p.y,p.z);return g;};
+    const pack=(gs,k,o={})=>{const p=[],n=[];for(const src of gs){const g=src.index?src.toNonIndexed():src;p.push(...g.attributes.position.array);n.push(...g.attributes.normal.array);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(n,3));c.geom(g,k,o);};
+    const block=(w,h,d,x=0,y=0,z=0)=>new THREE.BoxGeometry(w,h,d).translate(x,y,z);
+    V(1.04,.08,.72,CELL.WOOD,{y:.48});for(const x of [-.39,.39])for(const z of [-.24,.24])V(.07,.44,.07,CELL.WOOD,{x,y:.22,z});
+    V(.65,.05,.47,CELL.ACCENT,{x:-.12,y:.545,z:.02});
+    for(const s of [-1,1]){V(.30,.07,.43,CELL.LIGHT,{x:-.12+s*.157,y:.60,z:.02,rz:-s*.07},.006);}
+    B(.018,.08,.45,CELL.WOOD,{x:-.12,y:.596,z:.02});
+    const edges=[];for(let j=0;j<4;j++)edges.push(block(.62,.004,.004,-.12,.575+j*.012,.239));pack(edges,CELL.STONE_DARK);
+    // Abstract impressions suggest writing without drawing letters.
+    const marks=[];for(let i=0;i<6;i++)marks.push(block(.17+(i%2)*.035,.003,.008,-.28,.64,.16-i*.054));pack(marks,CELL.STONE_DARK);
+    for(let i=0;i<3;i++)V(.22,.012,.29,CELL.LIGHT,{x:.37,y:.526+i*.012,z:-.13,ry:(rand()-.5)*.14},.003);
+    c.geom(rod([.13,.541,.25],[.44,.541,.18],.013),CELL.METAL);E(.025,.022,.025,CELL.ACCENT2,{x:.43,y:.545,z:.183});
+    V(.08,.008,.34,CELL.CLOTH,{x:.06,y:.641,z:.06});
+    return { label: 'Gratitude Journal', kind: 'landmark' };
+  },
+  ideaworkbench(c, rand) {
+    const C=(r,h,k,o={},n=20)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const bevel=(w,h,d,r=.025)=>{r=Math.min(r,w/4,h/4,d/4);const s=new THREE.Shape();s.moveTo(-w/2+r,-h/2+r);s.lineTo(w/2-r,-h/2+r);s.lineTo(w/2-r,h/2-r);s.lineTo(-w/2+r,h/2-r);s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d-2*r,bevelEnabled:true,bevelSegments:1,steps:1,bevelSize:r,bevelThickness:r,curveSegments:1});g.translate(0,0,-d/2+r);return g;};
+    const V=(w,h,d,k,o={},r=.025)=>c.geom(bevel(w,h,d,r),k,o);
+    const pack=(gs,k,o={})=>{const p=[],n=[];for(const src of gs){const g=src.index?src.toNonIndexed():src;p.push(...g.attributes.position.array);n.push(...g.attributes.normal.array);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(n,3));c.geom(g,k,o);};
+    const block=(w,h,d,x=0,y=0,z=0)=>new THREE.BoxGeometry(w,h,d).translate(x,y,z);
+    V(1.90,.10,1.05,CELL.WOOD,{y:.49});
+    for(const x of [-.72,.72]){V(.14,.44,.78,CELL.WOOD,{x,y:.22});V(.22,.10,.90,CELL.METAL_DARK,{x,y:.05});}V(1.45,.09,.12,CELL.WOOD,{y:.18,z:-.30});
+    V(.78,.012,.65,CELL.LIGHT,{x:-.43,y:.548,z:.04},.003);
+    for(let i=0;i<4;i++)V(.20,.018,.18,i%2?CELL.ACCENT2:CELL.CLOTH,{x:-.66+(i%2)*.30,y:.564,z:-.14+Math.floor(i/2)*.30,ry:(rand()-.5)*.08},.003);
+    V(.43,.29,.36,CELL.STONE,{x:.38,y:.69,z:-.15});V(.48,.07,.42,CELL.ACCENT,{x:.38,y:.87,z:-.15});
+    V(.12,.20,.025,CELL.WOOD,{x:.29,y:.655,z:.044},.004);V(.15,.12,.025,CELL.GLASS,{x:.48,y:.716,z:.045},.004);
+    const awning=[];for(let i=0;i<5;i++)awning.push(block(.085,.06,.13,.20+i*.09,.81,.075));pack(awning,CELL.CLOTH);
+    for(let i=0;i<3;i++)C(.074,.027,CELL.METAL,{x:.34,y:.555+i*.027,z:.32},12);
+    V(.27,.20,.035,CELL.WOOD,{x:.77,y:.69,z:.19});C(.018,.13,CELL.METAL,{x:.77,y:.585,z:.19},8);
+    const grain=[];for(const z of [-.47,.46])grain.push(block(1.75,.006,.008,0,.543,z));pack(grain,CELL.STONE_DARK);
+    return { label: 'Idea Workbench', kind: 'landmark' };
+  },
+  promptconsole(c, rand) {
+    const B=(w,h,d,k,o={})=>c.geom(new THREE.BoxGeometry(w,h,d),k,o);
+    const C=(r,h,k,o={},n=20)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const E=(w,h,d,k,o={})=>{const g=new THREE.SphereGeometry(1,16,10);g.scale(w,h,d);c.geom(g,k,o);};
+    const bevel=(w,h,d,r=.025)=>{r=Math.min(r,w/4,h/4,d/4);const s=new THREE.Shape();s.moveTo(-w/2+r,-h/2+r);s.lineTo(w/2-r,-h/2+r);s.lineTo(w/2-r,h/2-r);s.lineTo(-w/2+r,h/2-r);s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d-2*r,bevelEnabled:true,bevelSegments:1,steps:1,bevelSize:r,bevelThickness:r,curveSegments:1});g.translate(0,0,-d/2+r);return g;};
+    const V=(w,h,d,k,o={},r=.025)=>c.geom(bevel(w,h,d,r),k,o);
+    const rod=(a,b,r)=>{const p=new THREE.Vector3(...a),v=new THREE.Vector3(...b).sub(p);const g=new THREE.CylinderGeometry(r,r,v.length(),8);g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),v.clone().normalize())));p.addScaledVector(v,.5);g.translate(p.x,p.y,p.z);return g;};
+    const pack=(gs,k,o={})=>{const p=[],n=[];for(const src of gs){const g=src.index?src.toNonIndexed():src;p.push(...g.attributes.position.array);n.push(...g.attributes.normal.array);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(n,3));c.geom(g,k,o);};
+    const block=(w,h,d,x=0,y=0,z=0)=>new THREE.BoxGeometry(w,h,d).translate(x,y,z);
+    V(1.43,.13,.90,CELL.METAL_DARK,{y:.065});V(1.25,.36,.70,CELL.STONE,{y:.29});V(1.47,.12,.92,CELL.ACCENT,{y:.515});
+    V(1.04,.59,.25,CELL.METAL_DARK,{y:.83,z:-.25});V(.82,.40,.025,CELL.GLASS,{y:.85,z:-.108});
+    c.group('screenlight',{y:.85,z:-.087});B(.035,.30,.012,CELL.ACCENT2,{emissive:.55});c.end();
+    V(.76,.035,.31,CELL.METAL_DARK,{x:-.13,y:.596,z:.19});const keys=[];for(let row=0;row<3;row++)for(let j=0;j<7;j++)keys.push(block(.065,.022,.06,-.43+j*.10,.624,.09+row*.087));pack(keys,CELL.LIGHT);
+    C(.08,.05,CELL.METAL,{x:.53,y:.605,z:.22});c.geom(rod([.53,.63,.22],[.53,.88,.10],.026),CELL.METAL);E(.065,.065,.065,CELL.RED,{x:.53,y:.89,z:.095});
+    c.group('scanner',{y:1.15,z:-.25});C(.12,.07,CELL.METAL);B(.15,.04,.025,CELL.GLOW,{z:.115,emissive:.72});c.end();
+    const grille=[];for(let i=0;i<5;i++)grille.push(block(.36,.018,.014,0,.19+i*.041,.36));pack(grille,CELL.METAL_DARK);
+    const rivets=[];for(const x of [-.59,.59])for(const y of [.16,.40])rivets.push(new THREE.SphereGeometry(.025,8,6).translate(x,y,.36));pack(rivets,CELL.METAL);
+
+    return { label: 'Prompt Console', kind: 'hero', loop: 4, pose(t, parts) { parts.screenlight.position.x=.34*Math.sin(t*Math.PI*2); parts.screenlight.position.z=Math.sin(t*Math.PI*12)>-.75?-.087:-.145; parts.scanner.rotation.y=.70*Math.sin(t*Math.PI*2); } };
+  },
+  badgetrophyshelf(c, rand) {
+    const C=(r,h,k,o={},n=20)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const bevel=(w,h,d,r=.025)=>{r=Math.min(r,w/4,h/4,d/4);const s=new THREE.Shape();s.moveTo(-w/2+r,-h/2+r);s.lineTo(w/2-r,-h/2+r);s.lineTo(w/2-r,h/2-r);s.lineTo(-w/2+r,h/2-r);s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d-2*r,bevelEnabled:true,bevelSegments:1,steps:1,bevelSize:r,bevelThickness:r,curveSegments:1});g.translate(0,0,-d/2+r);return g;};
+    const V=(w,h,d,k,o={},r=.025)=>c.geom(bevel(w,h,d,r),k,o);
+    const pack=(gs,k,o={})=>{const p=[],n=[];for(const src of gs){const g=src.index?src.toNonIndexed():src;p.push(...g.attributes.position.array);n.push(...g.attributes.normal.array);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(n,3));c.geom(g,k,o);};
+    V(1.48,.12,.55,CELL.STONE_DARK,{y:.06});V(1.36,1.46,.12,CELL.WOOD,{y:.85,z:-.20});
+    for(const x of [-.65,.65])V(.10,1.46,.46,CELL.WOOD,{x,y:.85});
+    for(const y of [.20,.68,1.16,1.58])V(1.39,.075,.48,CELL.WOOD,{y});
+    const empty=[],filled=[];for(let row=0;row<3;row++)for(let col=0;col<3;col++){
+      const x=(col-1)*.41,y=.405+row*.48;C(.135,.025,CELL.METAL_DARK,{x,y,z:-.115,rx:Math.PI/2},12);
+      const g=new THREE.TorusGeometry(.126,.016,5,16);g.translate(x,y,-.09);empty.push(g);
+      if(row===0){const disc=new THREE.CylinderGeometry(.086,.086,.05,6);disc.rotateX(Math.PI/2);disc.translate(x,y,-.03);filled.push(disc);}}
+    pack(empty,CELL.METAL);pack(filled,CELL.ACCENT2,{emissive:.62});
+    V(.64,.12,.05,CELL.ACCENT,{y:1.72,z:-.04});
+    return { label: 'Badge Trophy Shelf', kind: 'landmark' };
+  },
+  confetticannon(c, rand) {
+    const C=(r,h,k,o={},n=20)=>c.geom(new THREE.CylinderGeometry(r,r,h,n),k,o);
+    const T=(r,t,k,o={},arc=Math.PI*2)=>c.geom(new THREE.TorusGeometry(r,t,6,40,arc),k,o);
+    const bevel=(w,h,d,r=.025)=>{r=Math.min(r,w/4,h/4,d/4);const s=new THREE.Shape();s.moveTo(-w/2+r,-h/2+r);s.lineTo(w/2-r,-h/2+r);s.lineTo(w/2-r,h/2-r);s.lineTo(-w/2+r,h/2-r);s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth:d-2*r,bevelEnabled:true,bevelSegments:1,steps:1,bevelSize:r,bevelThickness:r,curveSegments:1});g.translate(0,0,-d/2+r);return g;};
+    const V=(w,h,d,k,o={},r=.025)=>c.geom(bevel(w,h,d,r),k,o);
+    const tube=(points,r=.025)=>new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(...p))),24,r,8,false);
+    V(.78,.13,.73,CELL.STONE,{y:.065});
+    for(const x of [-.27,.27])V(.11,.33,.45,CELL.METAL_DARK,{x,y:.295});
+    c.group('barrel',{y:.40,rx:Math.PI/4});
+    C(.21,.54,CELL.METAL,{y:.16},16);C(.17,.05,CELL.BLACK,{y:.443},16);T(.218,.032,CELL.METAL_DARK,{y:.43,rx:Math.PI/2});
+    T(.215,.026,CELL.ACCENT,{y:.08,rx:Math.PI/2});T(.215,.025,CELL.ACCENT2,{y:.27,rx:Math.PI/2});
+    for(const s of [-1,1])c.geom(tube([[s*.20,.09,0],[s*.31,.06,.08],[s*.30,-.04,.13]],.022),s<0?CELL.ACCENT:CELL.ACCENT2);
+    c.end();for(const x of [-.34,.34])C(.07,.055,CELL.METAL,{x,y:.40,rz:Math.PI/2},10);
+
+    return { label: 'Confetti Cannon', kind: 'hero', loop: 5, pose(t, parts) { const kick=Math.pow(Math.max(0,Math.sin(t*Math.PI*2)),12); parts.barrel.rotation.x=Math.PI/4-.10*kick; } };
+  },
 // END PIECES
   }
 }

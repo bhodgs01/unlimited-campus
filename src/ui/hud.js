@@ -65,6 +65,35 @@ const CSS = `
 .uc-famous button.active{background:rgba(229,1,255,.18);border-color:rgba(229,1,255,.55)}
 .uc-famous button img{width:32px;height:32px;border-radius:50%;object-fit:cover;background:#2a2f3a;flex:none}
 .uc-toast{padding:9px 13px;border-radius:10px;font-size:12.5px;max-width:320px}
+.uc-course{position:absolute;left:14px;top:64px;width:min(300px,calc(100vw - 28px));max-height:min(74vh,620px);padding:0;display:none;flex-direction:column;pointer-events:auto;overflow:hidden}
+.uc-course.open{display:flex}
+.uc-course .head{padding:13px 14px 11px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:3px}
+.uc-course .head b{font-family:Helvetica,'Helvetica Neue',Arial,sans-serif;font-size:16px;letter-spacing:.01em}
+.uc-course .head small{color:var(--muted);font-size:11.5px}
+.uc-course .bar{height:5px;border-radius:999px;background:rgba(255,255,255,.1);overflow:hidden;margin-top:7px}
+.uc-course .bar i{display:block;height:100%;background:linear-gradient(90deg,#AFFF00,#E501FF);width:0;transition:width .6s ease}
+.uc-course .mods{overflow-y:auto;padding:9px;display:flex;flex-direction:column;gap:6px}
+.uc-course .mod{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:11px;border:1px solid var(--line);background:rgba(255,255,255,.04);cursor:pointer;text-align:left;color:var(--text);font:inherit}
+.uc-course .mod:hover{border-color:rgba(175,255,0,.5);background:rgba(175,255,0,.08)}
+.uc-course .mod.done{border-color:rgba(175,255,0,.45)}
+.uc-course .mod.here{background:rgba(229,1,255,.16);border-color:rgba(229,1,255,.5)}
+.uc-course .mod i{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:11.5px;font-weight:700;background:rgba(255,255,255,.1);flex:none}
+.uc-course .mod.done i{background:#AFFF00;color:#131610}
+.uc-course .mod span{font-size:12.5px;line-height:1.35}
+.uc-course .mod small{display:block;color:var(--muted);font-size:11px}
+.uc-course .foot{padding:9px;border-top:1px solid var(--line);display:flex;gap:6px}
+.uc-media{position:absolute;left:50%;bottom:96px;transform:translateX(-50%);display:none;gap:6px;padding:7px;pointer-events:auto;align-items:center}
+.uc-media.open{display:flex}
+.uc-media .btn{white-space:nowrap}
+.uc-media .now{font-size:12px;color:var(--muted);padding:0 6px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.uc-quest{position:absolute;right:14px;bottom:96px;width:min(320px,calc(100vw - 28px));padding:13px 14px;display:none;flex-direction:column;gap:8px;pointer-events:auto}
+.uc-quest.open{display:flex}
+.uc-quest h4{margin:0;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:#AFFF00}
+.uc-quest p{margin:0;font-size:13px;line-height:1.45;color:var(--text)}
+.uc-quest .row{display:flex;gap:6px;justify-content:flex-end}
+.uc-quest .pips{display:flex;gap:4px;flex-wrap:wrap}
+.uc-quest .pip{width:13px;height:13px;border-radius:50%;border:1px solid rgba(255,255,255,.25)}
+.uc-quest .pip.on{background:#AFFF00;border-color:#AFFF00}
 .uc-chat{position:absolute;right:14px;top:14px;width:min(380px,calc(100vw - 28px));max-height:min(70vh,560px);padding:0;display:none;flex-direction:column;pointer-events:auto;overflow:hidden}
 .uc-chat.open{display:flex}
 .uc-chat .head{display:flex;align-items:center;gap:10px;padding:12px 12px 10px;border-bottom:1px solid var(--line)}
@@ -128,6 +157,13 @@ export class Hud {
         <div class="sound"></div>
         <form><input type="text" placeholder="Ask them something…" autocomplete="off" maxlength="300"><button class="btn primary" type="submit">Ask</button></form>
       </div>
+      <div class="panel uc-course">
+        <div class="head"><b></b><small></small><div class="bar"><i></i></div></div>
+        <div class="mods"></div>
+        <div class="foot"><button class="btn" data-act="leavecastle">Leave the castle</button><button class="btn primary" data-act="askguide">Ask your guide</button></div>
+      </div>
+      <div class="panel uc-media"><span class="now"></span></div>
+      <div class="panel uc-quest"><h4></h4><p></p><div class="pips"></div><div class="row"></div></div>
       <div class="panel uc-prompt"></div>
       <div class="uc-walkhint"><kbd>W A S D</kbd> to walk · drag to look · <kbd>Shift</kbd> to jog · <kbd>Esc</kbd> to fly again</div>
       <div class="uc-mantra">The Universe is conspiring to help me.</div>
@@ -139,6 +175,9 @@ export class Hud {
     this.chatLog = this.$('.uc-chat .log')
     this.prompt = this.$('.uc-prompt')
     this.walkHint = this.$('.uc-walkhint')
+    this.course = this.$('.uc-course')
+    this.media = this.$('.uc-media')
+    this.quest = this.$('.uc-quest')
     this.$('.uc-chat form').addEventListener('submit', (ev) => {
       ev.preventDefault()
       const input = this.$('.uc-chat input')
@@ -167,6 +206,8 @@ export class Hud {
       if (act === 'close') this.closeCard()
       else if (act === 'closehelp') this.toggleHelp(false)
       else if (act === 'closechat') this.closeChat()
+      else if (act === 'leavecastle') this.actions.leaveCastle?.()
+      else if (act === 'askguide') this.actions.askGuide?.()
       else if (act === 'help') this.toggleHelp()
       else actions[act]?.()
     })
@@ -312,6 +353,82 @@ export class Hud {
   closeCard() {
     this.card.classList.remove('open')
     this.actions.cardClosed?.()
+  }
+
+  /**
+   * The course panel down the left: every module, which are finished, and where you are.
+   * `onPick` is called with a module number.
+   */
+  showCourse(course, { done = [], here = null, onPick } = {}) {
+    if (!course) {
+      this.course.classList.remove('open')
+      return
+    }
+    this.course.classList.add('open')
+    this.$('.uc-course .head b').textContent = course.name
+    this.$('.uc-course .head small').textContent = course.tagline
+    const pct = Math.round((done.length / course.modules.length) * 100)
+    this.$('.uc-course .bar i').style.width = `${pct}%`
+    const list = this.$('.uc-course .mods')
+    list.innerHTML = ''
+    for (const m of course.modules) {
+      const b = document.createElement('button')
+      b.className = `mod${done.includes(m.n) ? ' done' : ''}${here === m.n ? ' here' : ''}`
+      b.innerHTML = `<i>${done.includes(m.n) ? '✓' : m.n}</i><span>${m.title}<small>${m.goal}</small></span>`
+      b.addEventListener('click', () => onPick?.(m.n))
+      list.appendChild(b)
+    }
+  }
+
+  /** The media bar: what is playing, and the buttons for this module's five things. */
+  showMedia(items) {
+    if (!items || !items.length) {
+      this.media.classList.remove('open')
+      return
+    }
+    this.media.classList.add('open')
+    this.media.innerHTML = '<span class="now"></span>'
+    for (const it of items) {
+      const b = document.createElement('button')
+      b.className = `btn${it.primary ? ' primary' : ''}`
+      b.textContent = it.label
+      b.addEventListener('click', it.fn)
+      this.media.appendChild(b)
+    }
+  }
+
+  nowPlaying(text) {
+    const el = this.media.querySelector('.now')
+    if (el) el.textContent = text || ''
+  }
+
+  /** The quest card: what this module asks you to do, and how far along you are. */
+  showQuest(quest) {
+    if (!quest) {
+      this.quest.classList.remove('open')
+      return
+    }
+    this.quest.classList.add('open')
+    this.quest.querySelector('h4').textContent = quest.kicker || 'Your quest'
+    this.quest.querySelector('p').textContent = quest.text
+    const pips = this.quest.querySelector('.pips')
+    pips.innerHTML = ''
+    if (quest.of) {
+      for (let i = 0; i < quest.of; i++) {
+        const d = document.createElement('div')
+        d.className = `pip${i < (quest.at || 0) ? ' on' : ''}`
+        pips.appendChild(d)
+      }
+    }
+    const row = this.quest.querySelector('.row')
+    row.innerHTML = ''
+    for (const a of quest.actions || []) {
+      const b = document.createElement('button')
+      b.className = `btn${a.primary ? ' primary' : ''}`
+      b.textContent = a.label
+      b.addEventListener('click', a.fn)
+      row.appendChild(b)
+    }
   }
 
   /** The rail's walk button, and the controls hint along the bottom. */

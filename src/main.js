@@ -23,6 +23,8 @@ import { PEOPLE } from './agents/family.js'
 import { Life } from './life/index.js'
 import { PORTAL_URL } from './life/portal.js'
 import { WalkMode } from './core/walk.js'
+import { CourseHall } from './world/interior.js'
+import { COURSES, GUIDES as COURSE_GUIDES, courseForCastle } from './data/courses.js'
 
 /**
  * Boot and the frame loop.
@@ -201,6 +203,8 @@ const hud = new Hud(app, settings, {
     if (walk.active) hud.toast('Dropped in. WASD to walk, drag to look, Esc to fly again.')
   },
   talk: () => talkToNearest(),
+  leaveCastle: () => leaveCastle(),
+  askGuide: () => inside.course && greetGuide(inside.course),
   ask: (text) => askTeacher(text),
   chatClosed: () => {
     chat.with = null
@@ -255,7 +259,9 @@ function cardFor(hit) {
       text: c.blurb,
       accent: c.accent,
       badges: c.badges.map((b, i) => ({ name: b, lit: i < 2, color: c.accent })),
-      actions: [{ label: 'Fly there', fn: () => flyTo(c.id), primary: true }],
+      actions: courseForCastle(c.id)
+        ? [{ label: `Enter · ${courseForCastle(c.id).name}`, fn: () => enterCastle(c.id), primary: true }, { label: 'Fly there', fn: () => flyTo(c.id) }]
+        : [{ label: 'Fly there', fn: () => flyTo(c.id), primary: true }],
     }
   }
   if (hit.tag === 'badge') {
@@ -351,7 +357,7 @@ function talkToNearest() {
 async function askTeacher(text) {
   if (!chat.with || chat.busy) return
   const famous = teacherFor(chat.with)
-  if (!famous) return
+  if (!famous && !COURSE_GUIDES[chat.with]) return
   hud.say('you', text)
   const waiting = hud.say('wait', 'thinking…')
   chat.busy = true
@@ -359,7 +365,14 @@ async function askTeacher(text) {
     const res = await fetch(`${BRAIN}/api/teacher-chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ teacher: chat.with, message: text, history: chat.history }),
+      body: JSON.stringify({
+        teacher: chat.with,
+        message: text,
+        history: chat.history,
+        context: inside.course
+          ? `You are the guide of the ${inside.course.name} course inside the Castle of ${inside.course.castle}. Its modules are: ${inside.course.modules.map((m) => `${m.n}. ${m.title} (${m.goal})`).join(' ')}${inside.module ? ` The student is standing in module ${inside.module.n}, ${inside.module.title}. Their quest is: ${inside.module.quest}` : ''}`
+          : undefined,
+      }),
     })
     const data = await res.json()
     waiting.remove()
@@ -393,6 +406,317 @@ function speak(text, voice) {
   } catch (err) {
     hud.chatNote('')
   }
+}
+
+// ── inside the castles: the courses ──────────────────────────────────────────────────────
+// A castle holds a course. Step inside and you are in its Course Hall: a gate per module, the
+// Awesomenaut who runs it on the dais, and a study pod through each gate with the video, the
+// podcast, the infographic, the text and the thing you actually do.
+const PROGRESS_KEY = 'unlimitedcampus.courses.v1'
+const inside = { hall: null, course: null, module: null, saved: null }
+let media = null
+
+function loadProgress() {
+  try {
+    return JSON.parse(localStorage.getItem(PROGRESS_KEY) || '{}')
+  } catch {
+    return {}
+  }
+}
+function saveProgress(p) {
+  try {
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify(p))
+  } catch {}
+}
+function doneModules(courseId) {
+  return loadProgress()[courseId]?.done || []
+}
+function markDone(courseId, n) {
+  const p = loadProgress()
+  const rec = (p[courseId] = p[courseId] || { done: [] })
+  if (!rec.done.includes(n)) rec.done.push(n)
+  rec.done.sort((a, b) => a - b)
+  saveProgress(p)
+  return rec.done
+}
+
+/** The media the mirror script copied off Alan's Drive, if it is there yet. */
+async function loadMedia() {
+  if (media) return media
+  try {
+    const res = await fetch(`${import.meta.env.BASE_URL}media/manifest.json`, { cache: 'no-cache' })
+    media = res.ok ? await res.json() : {}
+  } catch {
+    media = {}
+  }
+  return media
+}
+
+function enterCastle(castleId) {
+  const course = courseForCastle(castleId)
+  if (!course) {
+    hud.toast('This castle has no course in it yet.')
+    return
+  }
+  const castle = campus.castles.get(castleId)
+  fadeThrough(() => {
+    inside.saved = walk.active ? { walk: true, x: walk.pos.x, z: walk.pos.z, yaw: walk.yaw } : { walk: false, pose: rig.pose() }
+    if (!inside.hall || inside.hall.course.id !== course.id) {
+      inside.hall?.dispose()
+      inside.hall = new CourseHall(engine.scene, course, { shadows, castleAccent: castle?.castle?.accent || course.accent })
+    }
+    inside.course = course
+    inside.module = null
+    inside.hall.show(true)
+    inside.hall.setProgress(doneModules(course.id))
+    campus.group.visible = false
+    life.group.visible = false
+    astronauts.group.visible = false
+    people.list.forEach((pp) => (pp.g.visible = false))
+    labels.toggle(false)
+    if (!walk.active) walk.enter()
+    walk.pos.set(inside.hall.entrance.x, 0, inside.hall.entrance.z)
+    walk.yaw = Math.PI
+    walk.pitch = -0.02
+    walk.cancelTravel()
+    hud.closeCard()
+    showCourseHud()
+    greetGuide(course)
+  })
+}
+
+function leaveCastle() {
+  if (!inside.course) return
+  const course = inside.course
+  fadeThrough(() => {
+    stopMedia()
+    inside.hall?.closePod()
+    inside.hall?.show(false)
+    inside.course = null
+    inside.module = null
+    campus.group.visible = true
+    life.group.visible = true
+    astronauts.group.visible = true
+    people.list.forEach((pp) => (pp.g.visible = true))
+    labels.toggle(true)
+    hud.showCourse(null)
+    hud.showMedia(null)
+    hud.showQuest(null)
+    hud.closeChat()
+    const back = inside.saved
+    const c = campus.castles.get(course.castle)
+    if (back?.walk && c) {
+      walk.pos.set(c.x, 0, c.z + 16)
+      walk.yaw = Math.PI
+    } else {
+      if (walk.active) walk.exit()
+      if (c) rig.focus(new THREE.Vector3(c.x, 0, c.z), { distance: 58 })
+    }
+  })
+}
+
+/** A short wash of UA purple over the screen, so entering and leaving is a moment. */
+function fadeThrough(swap) {
+  const el = document.createElement('div')
+  el.style.cssText = 'position:fixed;inset:0;z-index:60;background:radial-gradient(circle at 50% 55%,#E501FF,#0b0d14 70%);opacity:0;transition:opacity .38s ease;pointer-events:none'
+  document.body.appendChild(el)
+  requestAnimationFrame(() => (el.style.opacity = '1'))
+  setTimeout(() => {
+    try {
+      swap()
+    } catch (err) {
+      console.warn('[castle]', err)
+    }
+    el.style.opacity = '0'
+    setTimeout(() => el.remove(), 420)
+  }, 400)
+}
+
+function showCourseHud() {
+  const course = inside.course
+  if (!course) return
+  hud.showCourse(course, {
+    done: doneModules(course.id),
+    here: inside.module?.n || null,
+    onPick: (n) => openModule(n),
+  })
+}
+
+/** Step through a gate: build the pod, walk in, and wire up this module's media. */
+async function openModule(n) {
+  const course = inside.course
+  if (!course) return
+  const module = course.modules.find((m) => m.n === n)
+  if (!module) return
+  stopMedia()
+  const pod = inside.hall.openPod(module)
+  inside.module = module
+  walk.goTo(pod.stand.x, pod.stand.z, { stop: 0.6 })
+  showCourseHud()
+  const all = await loadMedia()
+  const files = all?.[course.id]?.[String(n)] || {}
+  const base = `${import.meta.env.BASE_URL}media/`
+  const items = []
+  if (files.videoShort) items.push({ label: '▶ Quick take', primary: true, fn: () => playVideo(base + files.videoShort, `${module.title} — quick take`) })
+  if (files.video) items.push({ label: '▶ Deep dive', fn: () => playVideo(base + files.video, `${module.title} — deep dive`) })
+  if (files.podcastShort) items.push({ label: '🎧 Podcast', fn: () => playAudio(base + files.podcastShort, `${module.title} — podcast`) })
+  if (files.infographic) items.push({ label: '🖼 Infographic', fn: () => showInfographic(base + files.infographic) })
+  if (files.pdf) items.push({ label: '📄 Read', fn: () => window.open(base + files.pdf, '_blank', 'noopener') })
+  items.push({ label: '✓ Mark done', fn: () => completeModule(n) })
+  hud.showMedia(items.length ? items : [{ label: 'Media is still being copied over', fn: () => {} }])
+  hud.showQuest({ kicker: `Module ${n} quest`, text: module.quest, actions: [{ label: 'Done', primary: true, fn: () => completeModule(n) }] })
+  if (files.infographic) showInfographic(base + files.infographic)
+  else paintPlaceholder(module)
+}
+
+/** Until the media lands, the screen shows the module's own title rather than a black slab. */
+function paintPlaceholder(module) {
+  const cv = document.createElement('canvas')
+  cv.width = 1024
+  cv.height = 576
+  const ctx = cv.getContext('2d')
+  const g = ctx.createLinearGradient(0, 0, 1024, 576)
+  g.addColorStop(0, '#2a0b33')
+  g.addColorStop(1, '#0b0d14')
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, 1024, 576)
+  ctx.fillStyle = '#AFFF00'
+  ctx.font = 'bold 34px Helvetica, Arial, sans-serif'
+  ctx.fillText(`MODULE ${module.n}`, 60, 250)
+  ctx.fillStyle = '#ffffff'
+  ctx.font = 'bold 54px Helvetica, Arial, sans-serif'
+  wrapText(ctx, module.title, 60, 320, 900, 62)
+  const tex = new THREE.CanvasTexture(cv)
+  tex.colorSpace = THREE.SRGBColorSpace
+  inside.hall.paint(inside.hall.screen, tex)
+}
+
+function wrapText(ctx, text, x, y, maxW, lh) {
+  let line = ''
+  for (const word of String(text).split(' ')) {
+    const test = line ? `${line} ${word}` : word
+    if (ctx.measureText(test).width > maxW && line) {
+      ctx.fillText(line, x, y)
+      y += lh
+      line = word
+    } else line = test
+  }
+  ctx.fillText(line, x, y)
+}
+
+function playVideo(url, label) {
+  stopMedia()
+  const el = document.createElement('video')
+  el.src = url
+  el.crossOrigin = 'anonymous'
+  el.playsInline = true
+  el.preload = 'auto'
+  const tex = new THREE.VideoTexture(el)
+  tex.colorSpace = THREE.SRGBColorSpace
+  inside.hall.paint(inside.hall.screen, tex)
+  el.play().catch(() => hud.toast('Tap the screen once to allow sound.'))
+  media = media || {}
+  inside.playing = { el, kind: 'video' }
+  hud.nowPlaying(`▶ ${label}`)
+  el.addEventListener('ended', () => hud.nowPlaying(''))
+}
+
+function playAudio(url, label) {
+  stopMedia()
+  const el = new Audio(url)
+  el.play().catch(() => hud.toast('Tap once to allow sound.'))
+  inside.playing = { el, kind: 'audio' }
+  hud.nowPlaying(`🎧 ${label}`)
+  el.addEventListener('ended', () => hud.nowPlaying(''))
+}
+
+function showInfographic(url) {
+  new THREE.TextureLoader().load(url, (tex) => {
+    tex.colorSpace = THREE.SRGBColorSpace
+    inside.hall.paint(inside.hall.infoWall, tex)
+  })
+}
+
+function stopMedia() {
+  const p = inside.playing
+  if (!p) return
+  try {
+    p.el.pause()
+    p.el.src = ''
+  } catch {}
+  inside.playing = null
+  hud.nowPlaying('')
+}
+
+/** Finish a module: the gate lights, the pillar fills, the cannons fire. */
+function completeModule(n) {
+  const course = inside.course
+  if (!course) return
+  const done = markDone(course.id, n)
+  inside.hall.setProgress(done)
+  showCourseHud()
+  fireConfetti()
+  hud.toast(`Module ${n} complete. ${done.length} of ${course.modules.length}.`)
+  if (done.length >= course.modules.length) {
+    hud.toast(`${course.name} finished. Your badge is waiting outside.`, 'ok')
+    setTimeout(() => leaveCastle(), 2600)
+  }
+}
+
+/** Ribbons out of the two cannons by the dais. */
+function fireConfetti() {
+  const hall = inside.hall
+  if (!hall) return
+  const n = 90
+  const geo = new THREE.BufferGeometry()
+  const pos = new Float32Array(n * 3)
+  const vel = []
+  for (let i = 0; i < n; i++) {
+    const from = i % 2 ? -2.2 : 2.2
+    pos[i * 3] = from
+    pos[i * 3 + 1] = 1.6
+    pos[i * 3 + 2] = -3.2
+    vel.push({ x: (Math.random() - 0.5) * 3.5, y: 4 + Math.random() * 4, z: 1 + Math.random() * 3 })
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+  const pts = new THREE.Points(geo, new THREE.PointsMaterial({ size: 0.18, vertexColors: false, color: 0xafff00, transparent: true }))
+  hall.group.add(pts)
+  let t = 0
+  const tick = (dt) => {
+    t += dt
+    const arr = geo.attributes.position.array
+    for (let i = 0; i < n; i++) {
+      vel[i].y -= 9.8 * dt * 0.5
+      arr[i * 3] += vel[i].x * dt
+      arr[i * 3 + 1] += vel[i].y * dt
+      arr[i * 3 + 2] += vel[i].z * dt
+    }
+    geo.attributes.position.needsUpdate = true
+    pts.material.opacity = Math.max(0, 1 - t / 3.4)
+    if (t > 3.4) {
+      hall.group.remove(pts)
+      geo.dispose()
+      confettiTicks.delete(tick)
+    }
+  }
+  confettiTicks.add(tick)
+}
+const confettiTicks = new Set()
+
+/** The Awesomenaut who runs this hall greets you, in character and in voice. */
+function greetGuide(course) {
+  const g = COURSE_GUIDES[course.guide]
+  if (!g) return
+  const done = doneModules(course.id).length
+  chat.with = course.guide
+  chat.history = []
+  chat.course = course
+  hud.openChat({ name: g.name, known: `${g.role} · your guide for ${course.name}`, face: '' })
+  const line = done
+    ? `Welcome back. ${done} of ${course.modules.length} done — shall we pick up at module ${Math.min(done + 1, course.modules.length)}?`
+    : `Welcome to the ${course.name} hall. ${course.tagline}. Step through gate one when you are ready, or ask me anything first.`
+  hud.say('them', line)
+  speak(line, { luna: 'julia', orion: 'rock', atlas: 'macgyver' }[course.guide])
 }
 
 /** Through the portal: a shimmer in UA purple washes the screen, then you're at the School of Brain. */
@@ -436,6 +760,22 @@ engine.canvas.addEventListener('pointerup', (e) => {
   const rect = engine.canvas.getBoundingClientRect()
   ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
   ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
+  // inside a castle, the hall owns every click
+  if (inside.course && inside.hall) {
+    caster.setFromCamera(ndc, engine.camera)
+    const hits = caster.intersectObjects(inside.hall.pickables, true)
+    if (hits.length) {
+      let o = hits[0].object
+      while (o && !o.userData.tag && o.parent) o = o.parent
+      const tag = o?.userData?.tag
+      const n = Number(String(o?.userData?.id || '').split(':')[1])
+      if (tag === 'module' && n) openModule(n)
+      else if (tag === 'quest') hud.toast(inside.module ? inside.module.quest : 'Pick a module first.')
+      else if (tag === 'trophies') hud.toast(`${doneModules(inside.course.id).length} of ${inside.course.modules.length} modules done.`)
+      else if (tag === 'reader') window.open(`${import.meta.env.BASE_URL}media/${inside.course.id}/${inside.module?.n}/pdf.pdf`, '_blank', 'noopener')
+      return
+    }
+  }
   // the portal is a big target people stand around: it gets first claim on the click
   if (life.portal) {
     caster.setFromCamera(ndc, engine.camera)
@@ -745,6 +1085,10 @@ engine.add({
     if (engine.bloomPass) engine.bloomPass.strength = bloomWanted
     if (!vr.active) labels.update()
     campus.tick(dt, engine.camera)
+    if (inside.course) {
+      inside.hall?.tick(dt)
+      for (const t of confettiTicks) t(dt)
+    }
     life.update(dt, elapsed, nightK)
     badgeMoments.update(dt, engine.camera)
     fireworks.update(dt, nightK)
@@ -813,4 +1157,4 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
 engine.canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); console.warn('webgl context lost'); hud.toast('Graphics context lost, reloading…', 'err'); setTimeout(() => location.reload(), 1500) })
 
 // handy for probes
-window.__campus = { engine, rig, sky, campus, astronauts, roster, settings, hud, vr, people, playBadge, fireworks, life, walk, startChat, LITE }
+window.__campus = { engine, rig, sky, campus, astronauts, roster, settings, hud, vr, people, playBadge, fireworks, life, walk, startChat, enterCastle, leaveCastle, openModule, inside, COURSES, LITE }

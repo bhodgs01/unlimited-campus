@@ -1,5 +1,6 @@
 import http from 'node:http'
 import fsp from 'node:fs/promises'
+import { createReadStream } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { needsAuth, hasValidAuth, checkPassword, makeSetCookie, loginPage, authEnabled } from './auth.mjs'
@@ -8,6 +9,8 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 const DIST = path.join(here, '..', 'dist')
 const PORT = Number(process.env.PORT) || 5275
 const HOST = process.env.HOST || '127.0.0.1'
+/** Where the course media lives: an NFS mount of the NAS in the cluster, a folder locally. */
+const MEDIA_DIR = path.resolve(process.env.MEDIA_DIR || '/media')
 const STARTED = Date.now()
 
 const TYPES = {
@@ -24,6 +27,11 @@ const TYPES = {
   '.ico': 'image/x-icon',
   '.glb': 'model/gltf-binary',
   '.woff2': 'font/woff2',
+  '.mp4': 'video/mp4',
+  '.m4a': 'audio/mp4',
+  '.mp3': 'audio/mpeg',
+  '.pdf': 'application/pdf',
+  '.txt': 'text/plain; charset=utf-8',
 }
 
 function resolveInDist(pathname) {
@@ -76,6 +84,48 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }).end(loginPage())
       return
     }
+  }
+
+  // ── the course media, streamed from the NAS ─────────────────────────────────────────
+  // Videos are 30 to 150 MB, so this streams with Range support rather than reading a file
+  // into memory: without 206 replies a browser cannot seek and a headset stalls.
+  if (url.pathname.startsWith('/media/')) {
+    const rel = decodeURIComponent(url.pathname.slice('/media/'.length)).replace(/^\/+/, '')
+    const target = path.resolve(MEDIA_DIR, rel)
+    if (!target.startsWith(MEDIA_DIR + path.sep)) {
+      res.writeHead(403).end('Forbidden')
+      return
+    }
+    let stat
+    try {
+      stat = await fsp.stat(target)
+    } catch {
+      res.writeHead(404, { 'Content-Type': 'application/json' }).end('{"error":"not found"}')
+      return
+    }
+    const type = TYPES[path.extname(target)] || 'application/octet-stream'
+    const range = req.headers.range
+    if (range) {
+      const m = /bytes=(\d*)-(\d*)/.exec(range)
+      const start = m && m[1] ? Number(m[1]) : 0
+      const end = m && m[2] ? Math.min(Number(m[2]), stat.size - 1) : stat.size - 1
+      if (start >= stat.size) {
+        res.writeHead(416, { 'Content-Range': `bytes */${stat.size}` }).end()
+        return
+      }
+      res.writeHead(206, {
+        'Content-Type': type,
+        'Content-Length': end - start + 1,
+        'Content-Range': `bytes ${start}-${end}/${stat.size}`,
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'private, max-age=86400',
+      })
+      createReadStream(target, { start, end }).pipe(res)
+      return
+    }
+    res.writeHead(200, { 'Content-Type': type, 'Content-Length': stat.size, 'Accept-Ranges': 'bytes', 'Cache-Control': 'private, max-age=86400' })
+    createReadStream(target).pipe(res)
+    return
   }
 
   let file = resolveInDist(url.pathname)
