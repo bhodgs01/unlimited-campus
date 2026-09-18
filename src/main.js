@@ -545,7 +545,10 @@ const labels = (() => {
     const h = engine.canvas.clientHeight
     for (const it of items) {
       // far out only the castles and the heart read; zoomed in everything does
-      const want = visible && (it.l.kind === 'castle' || it.l.kind === 'hall' || it.l.kind === 'school' || it.l.kind === 'portal' || far < 260) && far < 420
+      // on the ground the labels sit at eye level and cover the campus: only what is close
+      const want = walk.active
+        ? Math.hypot(it.l.x - walk.pos.x, it.l.z - walk.pos.z) < 55
+        : visible && (it.l.kind === 'castle' || it.l.kind === 'hall' || it.l.kind === 'school' || it.l.kind === 'portal' || far < 260) && far < 420
       v.set(it.l.x, it.l.y, it.l.z).project(cam)
       const onScreen = want && v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1
       if (onScreen) {
