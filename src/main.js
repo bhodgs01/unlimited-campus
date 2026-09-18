@@ -483,6 +483,8 @@ function enterCastle(castleId) {
     walk.setBounds(insideBounds)
     hud.closeCard()
     showCourseHud()
+    hud.showHint('Walk onto the <b style="margin:0 3px">glowing circle</b> in the middle, or onto a lit gate')
+    setTimeout(() => inside.course && hud.showHint('Walk onto the <b style="margin:0 3px">glowing circle</b> in the middle, or onto a lit gate'), 5200)
     greetGuide(course)
   })
 }
@@ -599,6 +601,7 @@ async function openModule(n) {
   const pod = inside.hall.openPod(module)
   inside.module = module
   // a gate is a portal: step through it and you are in front of the screen, facing it
+  hud.showHint(null)
   fadeThrough(() => {
     walk.cancelTravel()
     walk.pos.set(pod.stand.x, 0, pod.stand.z)
@@ -623,6 +626,43 @@ async function openModule(n) {
   else paintPlaceholder(module)
 }
 
+/**
+ * Inside the hall, your feet do the work: walk onto a gate's pad and that module opens, step onto
+ * the circle in the middle and it takes you to the next one you have not finished. A pad you are
+ * already standing on does not fire again until you step off it.
+ */
+let steppedOn = null
+function insideSteps() {
+  const hall = inside.hall
+  if (!hall || inside.module || !walk.active) {
+    if (!inside.module) steppedOn = null
+    return
+  }
+  const near = (p, r) => p && Math.hypot(p.x - walk.pos.x, p.z - walk.pos.z) < r
+  for (const g of hall.gates) {
+    const pad = hall.gatePad(g.m.n)
+    if (near(pad, 1.4)) {
+      if (steppedOn !== `gate${g.m.n}`) {
+        steppedOn = `gate${g.m.n}`
+        openModule(g.m.n)
+      }
+      return
+    }
+  }
+  const centre = { x: INTERIOR_ORIGIN.x, z: INTERIOR_ORIGIN.z }
+  if (near(centre, 2.1)) {
+    if (steppedOn !== 'centre') {
+      steppedOn = 'centre'
+      const done = doneModules(inside.course.id)
+      const next = inside.course.modules.find((m) => !done.includes(m.n)) || inside.course.modules[0]
+      hud.toast(`Module ${next.n}: ${next.title}`)
+      openModule(next.n)
+    }
+    return
+  }
+  steppedOn = null
+}
+
 /** Back out of a pod into the hall, facing the dais. */
 function backToHall() {
   if (!inside.hall) return
@@ -636,6 +676,8 @@ function backToHall() {
     hud.showMedia(null)
     hud.showQuest(null)
     showCourseHud()
+    steppedOn = 'entrance'
+    hud.showHint('Walk onto the <b style="margin:0 3px">glowing circle</b> in the middle, or onto a lit gate')
   })
 }
 
@@ -1143,7 +1185,9 @@ engine.add({
     if (vr.active) vr.update(dt)
     else if (walk.active) walk.update(dt)
     else rig.update(dt)
-    if (walk.active && !hud.chatOpen) {
+    // outside, the prompt offers whoever you are standing next to; inside a castle it is the
+    // hall's own instruction, so leave it alone
+    if (walk.active && !hud.chatOpen && !inside.course) {
       const near = nearestTeacher()
       hud.showPrompt(near ? PEOPLE[near.id]?.name : null)
       nearId = near ? near.id : null
@@ -1159,8 +1203,9 @@ engine.add({
     if (!vr.active) labels.update()
     campus.tick(dt, engine.camera)
     if (inside.course) {
-      inside.hall?.tick(dt)
+      inside.hall?.tick(dt, elapsed)
       for (const t of confettiTicks) t(dt)
+      insideSteps()
     }
     life.update(dt, elapsed, nightK)
     badgeMoments.update(dt, engine.camera)

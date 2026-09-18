@@ -126,13 +126,33 @@ export class CourseHall {
       const ry = -a + P / 2
       const gate = this._piece('modulegate', x, z, { ry, scale: 1.7 * 0.95, palette: pal, tag: 'module', id: `${this.course.id}:${m.n}` })
       const num = this._piece('modulegatenumber', x - Math.cos(a) * 1.3, z - Math.sin(a) * 1.3, { ry, scale: 1.7 * 0.6, palette: pal })
-      this.gates.push({ m, gate, num, x, z, a, ry, done: false })
+      // a lit pad on the floor in front of the gate: this is the bit you walk onto
+      const px = Math.cos(a) * (HALL_R - 2.6)
+      const pz = Math.sin(a) * (HALL_R - 2.6)
+      const pad = new THREE.Mesh(
+        new THREE.RingGeometry(0.62, 0.95, 28),
+        new THREE.MeshBasicMaterial({ color: 0xafff00, transparent: true, opacity: 0.55, side: THREE.DoubleSide })
+      )
+      pad.rotation.x = -P / 2
+      pad.position.set(px, 0.06, pz)
+      this.group.add(pad)
+      this.gates.push({ m, gate, num, pad, x, z, a, ry, px, pz, done: false })
     }
 
     // progress pillar and the trophy shelf, either side of the way out
     this.pillar = this._piece('progresspillar', -3.4, HALL_R - 2.6, { scale: 1.7 * 0.9, palette: pal })
     this._piece('badgetrophyshelf', 3.6, HALL_R - 2.4, { ry: -P * 0.15, scale: 1.7 * 0.9, palette: pal, tag: 'trophies', id: this.course.id })
     this.cannons = [-1, 1].map((s) => this._piece('confetticannon', s * 2.0, -3.0, { ry: s * 0.4, scale: 1.7 * 0.8, palette: pal }))
+
+    // the circle in the middle: step onto it and it carries you to your next module
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(1.5, 2.1, 48),
+      new THREE.MeshBasicMaterial({ color: this.accent, transparent: true, opacity: 0.6, side: THREE.DoubleSide })
+    )
+    ring.rotation.x = -P / 2
+    ring.position.y = 0.55
+    this.group.add(ring)
+    this.centreRing = ring
 
     // where you stand when you walk in, and where the guide stands
     this.entrance = { x: INTERIOR_ORIGIN.x, z: INTERIOR_ORIGIN.z + HALL_R - 2.2, yaw: P }
@@ -288,8 +308,21 @@ export class CourseHall {
     this.group.visible = on
   }
 
-  tick(dt) {
+  tick(dt, elapsed = 0) {
     for (const b of this.animated) b.tick?.(dt)
+    // the pads breathe, so they read as "stand here" rather than as decoration
+    const pulse = 0.42 + 0.22 * Math.sin(elapsed * 2.2)
+    if (this.centreRing) {
+      this.centreRing.material.opacity = pulse + 0.15
+      this.centreRing.rotation.z += dt * 0.25
+    }
+    for (const g of this.gates) if (g.pad) g.pad.material.opacity = g.done ? 0.28 : pulse
+  }
+
+  /** Where a module's floor pad is in the world. */
+  gatePad(n) {
+    const g = this.gates.find((x) => x.m.n === n)
+    return g ? { x: INTERIOR_ORIGIN.x + g.px, z: INTERIOR_ORIGIN.z + g.pz } : null
   }
 
   dispose() {

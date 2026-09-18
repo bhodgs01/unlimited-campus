@@ -149,6 +149,10 @@ export class Hud {
         <p>Click a castle for its badges, a badge kiosk for the badge, a student to meet them.</p>
         <p>The chips along the bottom fly to each castle. Home returns to the plaza.</p>
         <p>On a Quest, open this page in the headset browser and press Enter VR.</p>
+        <h3 style="margin-top:12px">Inside a castle</h3>
+        <p>Each castle holds a course. Click one and choose <b>Enter</b>.</p>
+        <p><b>Walk onto the glowing circle in the middle</b> and it takes you to your next module. Or walk onto the lit pad in front of any numbered gate to go straight to that one.</p>
+        <p>In a module: the wall plays the video, the stand holds the podcast, the board shows the infographic. <b>← Hall</b> brings you back, <b>Leave the castle</b> takes you outside.</p>
         <div class="row"><button class="btn primary" data-act="closehelp">Got it</button></div>
       </div>
       <div class="panel uc-chat">
@@ -450,6 +454,16 @@ export class Hud {
       return
     }
     this.prompt.innerHTML = `💬 Talk to <b style="margin:0 2px">${name}</b> <kbd>E</kbd>`
+    this.prompt.classList.add('open')
+  }
+
+  /** A plain instruction in the same place as the talk prompt (no name, no key hint). */
+  showHint(text) {
+    if (!text) {
+      this.prompt.classList.remove('open')
+      return
+    }
+    this.prompt.innerHTML = text
     this.prompt.classList.add('open')
   }
 
