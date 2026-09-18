@@ -221,6 +221,7 @@ walk.hud = hud
 function flyTo(id) {
   const c = campus.castles.get(id)
   if (!c) return
+  if (walk.active) walk.exit()
   selectedCastle = id
   hud.setActiveChip(id)
   rig.focus(new THREE.Vector3(c.x, 0, c.z), { distance: 58 })

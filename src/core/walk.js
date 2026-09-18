@@ -40,7 +40,8 @@ export class WalkMode {
       if (!this.active) return
       if (e.target && /input|textarea/i.test(e.target.tagName)) return
       this.keys.add(e.code)
-      if (e.code === 'Escape') this.exit()
+      // Escape closes an open chat first; a second press leaves walk mode
+      if (e.code === 'Escape' && !this.hud?.chatOpen) this.exit()
       if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault()
     })
     addEventListener('keyup', (e) => this.keys.delete(e.code))

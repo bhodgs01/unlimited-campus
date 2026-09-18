@@ -81,10 +81,10 @@ const CSS = `
 .uc-chat input{flex:1;min-width:0;background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:999px;padding:9px 13px;color:var(--text);font:inherit;font-size:13.5px}
 .uc-chat input:focus{outline:none;border-color:rgba(229,1,255,.6)}
 .uc-chat .sound{font-size:11px;color:var(--muted);padding:0 12px 9px;display:flex;align-items:center;gap:6px}
-.uc-prompt{position:absolute;left:50%;bottom:76px;transform:translateX(-50%);display:none;align-items:center;gap:9px;padding:9px 14px;border-radius:999px;pointer-events:auto;cursor:pointer;font-size:13.5px}
+.uc-prompt{position:absolute;left:50%;bottom:112px;transform:translateX(-50%);display:none;align-items:center;gap:9px;padding:9px 14px;border-radius:999px;pointer-events:auto;cursor:pointer;font-size:13.5px}
 .uc-prompt.open{display:flex}
 .uc-prompt kbd{background:rgba(255,255,255,.1);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font:inherit;font-size:11.5px}
-.uc-walkhint{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);color:rgba(255,255,255,.72);font-size:12.5px;display:none;pointer-events:none;text-align:center}
+.uc-walkhint{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);color:rgba(255,255,255,.72);font-size:12.5px;display:none;pointer-events:none;text-align:center}
 .uc-walkhint.open{display:block}
 @media (max-width:640px){.uc-chat{top:auto;bottom:64px;right:14px;left:14px;width:auto;max-height:56vh}.uc-card{top:auto;bottom:64px;right:14px;left:14px;width:auto}.uc-title small{display:none}}
 `
