@@ -453,6 +453,7 @@ engine.canvas.addEventListener('pointerup', (e) => {
   if (agent) {
     astronauts.setSelected(agent)
     hud.showCard(cardFor({ kind: 'agent', agent }))
+    if (walk.active && Math.hypot(agent.pos.x - walk.pos.x, agent.pos.z - walk.pos.z) > 3) walk.goTo(agent.pos.x, agent.pos.z)
     return
   }
   caster.setFromCamera(ndc, engine.camera)
@@ -608,8 +609,15 @@ rig.onUnfollow = () => {
 function findPerson(id) {
   const p = people.get(id)
   if (!p) return
-  if (walk.active && teacherFor(id)) {
-    startChat(id)
+  // on foot, clicking someone walks you over to them and starts the conversation there
+  if (walk.active) {
+    const info = PEOPLE[id]
+    if (Math.hypot(p.pos.x - walk.pos.x, p.pos.z - walk.pos.z) > 3) {
+      hud.toast(`Walking over to ${info?.name?.split(' ')[0] || 'them'}…`)
+      walk.goTo(p.pos.x, p.pos.z, { onArrive: () => teacherFor(id) && startChat(id) })
+      return
+    }
+    if (teacherFor(id)) startChat(id)
     return
   }
   if (following === id) {
