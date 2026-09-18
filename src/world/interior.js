@@ -266,6 +266,21 @@ export class CourseHall {
     if (!best) return null
     best.material = new THREE.MeshBasicMaterial({ map: texture, toneMapped: false, color: 0xffffff })
     texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping
+    // a black backdrop the size of the whole panel, so the bars beside a portrait video read as
+    // letterboxing rather than as the wall showing through
+    if (!best.userData.backdrop) {
+      const bb = best.geometry.boundingBox
+      const size = bb.getSize(new THREE.Vector3())
+      const centre = bb.getCenter(new THREE.Vector3())
+      const back = new THREE.Mesh(
+        new THREE.PlaneGeometry(size.x * 1.01, size.y * 1.01),
+        new THREE.MeshBasicMaterial({ color: 0x07080c })
+      )
+      back.position.copy(centre)
+      back.position.z -= 0.012
+      best.parent?.add(back)
+      best.userData.backdrop = back
+    }
     return best
   }
 
