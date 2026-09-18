@@ -483,9 +483,11 @@ function enterCastle(castleId) {
     walk.setBounds(insideBounds)
     hud.closeCard()
     showCourseHud()
-    hud.showHint('Walk onto the <b style="margin:0 3px">glowing circle</b> in the middle, or onto a lit gate')
-    setTimeout(() => inside.course && hud.showHint('Walk onto the <b style="margin:0 3px">glowing circle</b> in the middle, or onto a lit gate'), 5200)
     greetGuide(course)
+    // after the guide's greeting, because opening a chat clears the prompt line
+    const hint = 'Walk onto the <b style="margin:0 3px">glowing circle</b> in the middle, or onto a lit gate'
+    hud.showHint(hint)
+    setTimeout(() => inside.course && !inside.module && hud.showHint(hint), 5200)
   })
 }
 
