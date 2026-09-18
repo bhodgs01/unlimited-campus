@@ -188,16 +188,18 @@ export class CourseHall {
 
     this.pod = { module, group: g, x: INTERIOR_ORIGIN.x + cx, z: INTERIOR_ORIGIN.z + cz, yaw: -a + P / 2 }
     // where you land when you step through the gate, and which way you face
-    // stand behind the bench looking at the screen, worked out in the pod's own frame so it is
-    // right whichever gate you came through (the screen sits at local z = -4.6)
-    g.updateMatrixWorld(true)
-    const standLocal = new THREE.Vector3(0, 0, 2.4)
-    const screenLocal = new THREE.Vector3(0, 0, -4.6)
-    const standWorld = g.localToWorld(standLocal.clone())
-    const screenWorld = g.localToWorld(screenLocal.clone())
-    this.pod.stand = { x: standWorld.x + INTERIOR_ORIGIN.x, z: standWorld.z + INTERIOR_ORIGIN.z }
+    // Stand behind the bench looking at the screen. The pod is rotated by `ry` about its own
+    // centre, so a local point (0, 0, d) lands at (d sin ry, d cos ry) from it: no matrices needed,
+    // and it is right whichever gate you came through.
+    const ry = -a + P / 2
+    const sin = Math.sin(ry)
+    const cos = Math.cos(ry)
+    const at = (d) => ({ x: INTERIOR_ORIGIN.x + cx + d * sin, z: INTERIOR_ORIGIN.z + cz + d * cos })
+    this.pod.stand = at(2.4)
     this.pod.radius = 6.6
-    this.pod.yawToScreen = Math.atan2(screenWorld.x - standWorld.x, screenWorld.z - standWorld.z)
+    // the screen sits at local z = -4.6, so you face along the pod's own -z
+    this.pod.yawToScreen = ry + P
+
     return this.pod
   }
 
