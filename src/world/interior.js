@@ -151,8 +151,23 @@ export class CourseHall {
     )
     ring.rotation.x = -P / 2
     ring.position.y = 0.55
-    this.group.add(ring)
+    // a ring on the floor too, because the dais rim hides the top one as you walk in
+    const floorRing = new THREE.Mesh(
+      new THREE.RingGeometry(2.6, 3.2, 48),
+      new THREE.MeshBasicMaterial({ color: this.accent, transparent: true, opacity: 0.45, side: THREE.DoubleSide })
+    )
+    floorRing.rotation.x = -P / 2
+    floorRing.position.y = 0.07
+    // and a soft column of light standing in it, visible from the door
+    const beam = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.7, 2.3, 6.4, 28, 1, true),
+      new THREE.MeshBasicMaterial({ color: this.accent, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false })
+    )
+    beam.position.y = 3.4
+    this.group.add(ring, floorRing, beam)
     this.centreRing = ring
+    this.centreFloor = floorRing
+    this.centreBeam = beam
 
     // where you stand when you walk in, and where the guide stands
     this.entrance = { x: INTERIOR_ORIGIN.x, z: INTERIOR_ORIGIN.z + HALL_R - 2.2, yaw: P }
@@ -203,8 +218,9 @@ export class CourseHall {
     this.infoWall = piece('infographicwall', 4.4, -2.2, { ry: -P / 2.8, scale: 1.7 * 0.95, tag: 'infographic', id: `${this.course.id}:${module.n}` })
     this.lectern = piece('readerlectern', -4.4, -2.0, { ry: P / 2.8, scale: 1.7 * 0.85, tag: 'reader', id: `${this.course.id}:${module.n}` })
     piece('podcaststand', 2.4, 0.8, { ry: -0.5, scale: 1.7 * 0.8, tag: 'podcast', id: `${this.course.id}:${module.n}` })
-    this.questProp = piece(this.course.quest, -1.2, 2.8, { ry: P * 0.9, scale: 1.7 * 0.85, tag: 'quest', id: `${this.course.id}:${module.n}` })
-    if (this.course.id === 'gratitude') piece('gratitudejournal', 2.2, 2.6, { ry: -P * 0.8, scale: 1.7 * 0.8, tag: 'quest', id: `${this.course.id}:${module.n}` })
+    // well off to the left and behind you: it was standing between the seat and the screen
+    this.questProp = piece(this.course.quest, -5.0, 3.4, { ry: P * 0.62, scale: 1.7 * 0.6, tag: 'quest', id: `${this.course.id}:${module.n}` })
+    if (this.course.id === 'gratitude') piece('gratitudejournal', 4.6, 3.2, { ry: -P * 0.62, scale: 1.7 * 0.7, tag: 'quest', id: `${this.course.id}:${module.n}` })
     for (const s of [-1, 1]) piece('hallbrazier', s * 5.0, 1.8, { scale: 1.7 * 0.8 })
     this._shell(g, 7.4, 6.2, { lights: [{ x: -5, z: 1.8, y: 2.6, power: 2.2 }, { x: 5, z: 1.8, y: 2.6, power: 2.2 }, { x: 0, z: -3.4, y: 3.0, power: 1.8, reach: 12 }] })
 
@@ -316,6 +332,8 @@ export class CourseHall {
       this.centreRing.material.opacity = pulse + 0.15
       this.centreRing.rotation.z += dt * 0.25
     }
+    if (this.centreFloor) this.centreFloor.material.opacity = 0.28 + 0.2 * Math.sin(elapsed * 2.2 + 1)
+    if (this.centreBeam) this.centreBeam.material.opacity = 0.09 + 0.05 * Math.sin(elapsed * 1.6)
     for (const g of this.gates) if (g.pad) g.pad.material.opacity = g.done ? 0.28 : pulse
   }
 

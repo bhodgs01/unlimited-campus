@@ -624,8 +624,9 @@ async function openModule(n) {
   items.push({ label: '← Hall', fn: () => backToHall() })
   hud.showMedia(items.length ? items : [{ label: 'Media is still being copied over', fn: () => {} }])
   hud.showQuest({ kicker: `Module ${n} quest`, text: module.quest, actions: [{ label: 'Done', primary: true, fn: () => completeModule(n) }] })
+  // the screen shows the module's own card until you press play, rather than an empty panel
+  paintPlaceholder(module)
   if (files.infographic) showInfographic(base + files.infographic)
-  else paintPlaceholder(module)
 }
 
 /**
@@ -700,6 +701,9 @@ function paintPlaceholder(module) {
   ctx.fillStyle = '#ffffff'
   ctx.font = 'bold 54px Helvetica, Arial, sans-serif'
   wrapText(ctx, module.title, 60, 320, 900, 62)
+  ctx.fillStyle = 'rgba(255,255,255,0.75)'
+  ctx.font = '26px Helvetica, Arial, sans-serif'
+  ctx.fillText('Press Quick take or Deep dive to play', 60, 470)
   const tex = new THREE.CanvasTexture(cv)
   tex.colorSpace = THREE.SRGBColorSpace
   inside.hall.paint(inside.hall.screen, tex)
