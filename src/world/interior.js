@@ -195,7 +195,7 @@ export class CourseHall {
     const sin = Math.sin(ry)
     const cos = Math.cos(ry)
     const at = (d) => ({ x: INTERIOR_ORIGIN.x + cx + d * sin, z: INTERIOR_ORIGIN.z + cz + d * cos })
-    this.pod.stand = at(2.4)
+    this.pod.stand = at(5.6)
     this.pod.radius = 6.6
     // the screen sits at local z = -4.6, so you face along the pod's own -z
     this.pod.yawToScreen = ry + P
@@ -222,7 +222,29 @@ export class CourseHall {
     this.lectern = null
   }
 
-  /** Paint a texture onto a piece's biggest flat face (the screen, the infographic wall). */
+  /**
+   * Paint a texture onto a piece's biggest flat face (the screen, the infographic wall), fitted
+   * rather than stretched: his short videos are portrait and his infographics are tall, so a
+   * straight map onto a wide quad would squash them.
+   */
+  fit(mesh, texture, mediaAspect) {
+    if (!mesh || !texture || !mediaAspect) return
+    mesh.geometry.computeBoundingBox()
+    const s = mesh.geometry.boundingBox.getSize(new THREE.Vector3())
+    const faceAspect = (s.x || 1) / (s.y || 1)
+    const k = mediaAspect / faceAspect
+    texture.center.set(0.5, 0.5)
+    if (k > 1) {
+      // media is wider than the face: bars top and bottom
+      texture.repeat.set(1, k)
+      texture.offset.set(0, (1 - k) / 2)
+    } else {
+      texture.repeat.set(1 / k, 1)
+      texture.offset.set((1 - 1 / k) / 2, 0)
+    }
+    texture.needsUpdate = true
+  }
+
   paint(built, texture) {
     if (!built || !texture) return null
     let best = null
@@ -239,7 +261,8 @@ export class CourseHall {
       }
     })
     if (!best) return null
-    best.material = new THREE.MeshBasicMaterial({ map: texture, toneMapped: false })
+    best.material = new THREE.MeshBasicMaterial({ map: texture, toneMapped: false, color: 0xffffff })
+    texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping
     return best
   }
 

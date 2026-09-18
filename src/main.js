@@ -683,7 +683,9 @@ function playVideo(url, label) {
   el.preload = 'auto'
   const tex = new THREE.VideoTexture(el)
   tex.colorSpace = THREE.SRGBColorSpace
-  inside.hall.paint(inside.hall.screen, tex)
+  const mesh = inside.hall.paint(inside.hall.screen, tex)
+  // his quick takes are portrait and the deep dives are wide: fit, never stretch
+  el.addEventListener('loadedmetadata', () => inside.hall?.fit(mesh, tex, el.videoWidth / el.videoHeight), { once: true })
   el.play().catch(() => hud.toast('Tap the screen once to allow sound.'))
   media = media || {}
   inside.playing = { el, kind: 'video' }
@@ -703,7 +705,8 @@ function playAudio(url, label) {
 function showInfographic(url) {
   new THREE.TextureLoader().load(url, (tex) => {
     tex.colorSpace = THREE.SRGBColorSpace
-    inside.hall.paint(inside.hall.infoWall, tex)
+    const mesh = inside.hall?.paint(inside.hall.infoWall, tex)
+    inside.hall?.fit(mesh, tex, (tex.image?.width || 1) / (tex.image?.height || 1))
   })
 }
 
