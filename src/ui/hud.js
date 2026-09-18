@@ -14,6 +14,8 @@ const ICON = {
   help: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .8-1 1.5v.7M12 17h.01"/></svg>',
   vr: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="10" rx="3"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/></svg>',
   crew: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>',
+  walk: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13" cy="4" r="2"/><path d="M11 21l1.5-5.5L9 13l1-5 4 2 2 3"/><path d="M10 8l-3 2-1 4"/><path d="M12.5 15.5L16 21"/></svg>',
+  fly: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l18-8-8 18-2-7z"/></svg>',
 }
 
 const CSS = `
@@ -63,7 +65,28 @@ const CSS = `
 .uc-famous button.active{background:rgba(229,1,255,.18);border-color:rgba(229,1,255,.55)}
 .uc-famous button img{width:32px;height:32px;border-radius:50%;object-fit:cover;background:#2a2f3a;flex:none}
 .uc-toast{padding:9px 13px;border-radius:10px;font-size:12.5px;max-width:320px}
-@media (max-width:640px){.uc-card{top:auto;bottom:64px;right:14px;left:14px;width:auto}.uc-title small{display:none}}
+.uc-chat{position:absolute;right:14px;top:14px;width:min(380px,calc(100vw - 28px));max-height:min(70vh,560px);padding:0;display:none;flex-direction:column;pointer-events:auto;overflow:hidden}
+.uc-chat.open{display:flex}
+.uc-chat .head{display:flex;align-items:center;gap:10px;padding:12px 12px 10px;border-bottom:1px solid var(--line)}
+.uc-chat .head img{width:38px;height:38px;border-radius:50%;object-fit:cover;background:#2a2f3a}
+.uc-chat .head b{font-family:Helvetica,'Helvetica Neue',Arial,sans-serif;font-size:15px}
+.uc-chat .head small{display:block;color:var(--muted);font-size:11.5px}
+.uc-chat .head .btn{margin-left:auto}
+.uc-chat .log{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:9px;min-height:120px}
+.uc-chat .msg{font-size:13.5px;line-height:1.5;padding:9px 12px;border-radius:13px;max-width:86%}
+.uc-chat .msg.them{background:rgba(229,1,255,.14);border:1px solid rgba(229,1,255,.34);align-self:flex-start;border-bottom-left-radius:4px}
+.uc-chat .msg.you{background:rgba(255,255,255,.08);border:1px solid var(--line);align-self:flex-end;border-bottom-right-radius:4px}
+.uc-chat .msg.wait{opacity:.6;font-style:italic}
+.uc-chat form{display:flex;gap:6px;padding:10px;border-top:1px solid var(--line)}
+.uc-chat input{flex:1;min-width:0;background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:999px;padding:9px 13px;color:var(--text);font:inherit;font-size:13.5px}
+.uc-chat input:focus{outline:none;border-color:rgba(229,1,255,.6)}
+.uc-chat .sound{font-size:11px;color:var(--muted);padding:0 12px 9px;display:flex;align-items:center;gap:6px}
+.uc-prompt{position:absolute;left:50%;bottom:76px;transform:translateX(-50%);display:none;align-items:center;gap:9px;padding:9px 14px;border-radius:999px;pointer-events:auto;cursor:pointer;font-size:13.5px}
+.uc-prompt.open{display:flex}
+.uc-prompt kbd{background:rgba(255,255,255,.1);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font:inherit;font-size:11.5px}
+.uc-walkhint{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);color:rgba(255,255,255,.72);font-size:12.5px;display:none;pointer-events:none;text-align:center}
+.uc-walkhint.open{display:block}
+@media (max-width:640px){.uc-chat{top:auto;bottom:64px;right:14px;left:14px;width:auto;max-height:56vh}.uc-card{top:auto;bottom:64px;right:14px;left:14px;width:auto}.uc-title small{display:none}}
 `
 
 export class Hud {
@@ -85,6 +108,7 @@ export class Hud {
         <button class="btn" data-act="orbit" title="Orbit the campus">${ICON.orbit}</button>
         <button class="btn" data-act="night" title="Day / night">${ICON.moon}</button>
         <button class="btn" data-act="crew" title="Show / hide students">${ICON.crew}</button>
+        <button class="btn" data-act="walk" title="Drop in and walk (Esc to fly again)">${ICON.walk}</button>
         <button class="btn" data-act="vr" title="Enter VR" hidden>${ICON.vr}</button>
         <button class="btn" data-act="help" title="Help">${ICON.help}</button>
       </div>
@@ -98,11 +122,32 @@ export class Hud {
         <p>On a Quest, open this page in the headset browser and press Enter VR.</p>
         <div class="row"><button class="btn primary" data-act="closehelp">Got it</button></div>
       </div>
+      <div class="panel uc-chat">
+        <div class="head"><img alt=""><div><b></b><small></small></div><button class="btn x" data-act="closechat">✕</button></div>
+        <div class="log"></div>
+        <div class="sound"></div>
+        <form><input type="text" placeholder="Ask them something…" autocomplete="off" maxlength="300"><button class="btn primary" type="submit">Ask</button></form>
+      </div>
+      <div class="panel uc-prompt"></div>
+      <div class="uc-walkhint"><kbd>W A S D</kbd> to walk · drag to look · <kbd>Shift</kbd> to jog · <kbd>Esc</kbd> to fly again</div>
       <div class="uc-mantra">The Universe is conspiring to help me.</div>
       <div class="toasts"></div>`
     root.appendChild(this.el)
     this.$ = (s) => this.el.querySelector(s)
     this.card = this.$('.uc-card')
+    this.chat = this.$('.uc-chat')
+    this.chatLog = this.$('.uc-chat .log')
+    this.prompt = this.$('.uc-prompt')
+    this.walkHint = this.$('.uc-walkhint')
+    this.$('.uc-chat form').addEventListener('submit', (ev) => {
+      ev.preventDefault()
+      const input = this.$('.uc-chat input')
+      const text = input.value.trim()
+      if (!text) return
+      input.value = ''
+      this.actions.ask?.(text)
+    })
+    this.prompt.addEventListener('click', () => this.actions.talk?.())
     this.help = this.$('.uc-help')
     this.chips = this.$('.uc-chips')
 
@@ -121,6 +166,7 @@ export class Hud {
       const act = b.dataset.act
       if (act === 'close') this.closeCard()
       else if (act === 'closehelp') this.toggleHelp(false)
+      else if (act === 'closechat') this.closeChat()
       else if (act === 'help') this.toggleHelp()
       else actions[act]?.()
     })
@@ -266,6 +312,65 @@ export class Hud {
   closeCard() {
     this.card.classList.remove('open')
     this.actions.cardClosed?.()
+  }
+
+  /** The rail's walk button, and the controls hint along the bottom. */
+  setWalk(on) {
+    const b = this.$('[data-act="walk"]')
+    if (b) {
+      b.classList.toggle('on', on)
+      b.innerHTML = on ? ICON.fly : ICON.walk
+      b.title = on ? 'Fly again (Esc)' : 'Drop in and walk (Esc to fly again)'
+    }
+    this.walkHint.classList.toggle('open', Boolean(on))
+    if (!on) this.showPrompt(null)
+  }
+
+  /** "Talk to Socrates" over the bottom of the screen, when you are standing by someone. */
+  showPrompt(name) {
+    if (!name) {
+      this.prompt.classList.remove('open')
+      return
+    }
+    this.prompt.innerHTML = `💬 Talk to <b style="margin:0 2px">${name}</b> <kbd>E</kbd>`
+    this.prompt.classList.add('open')
+  }
+
+  openChat({ name, known, face }) {
+    this.showPrompt(null)
+    this.closeCard()
+    this.chat.classList.add('open')
+    const img = this.$('.uc-chat .head img')
+    img.src = face || ''
+    img.style.display = face ? '' : 'none'
+    this.$('.uc-chat .head b').textContent = name
+    this.$('.uc-chat .head small').textContent = known || ''
+    this.chatLog.innerHTML = ''
+    this.$('.uc-chat .sound').textContent = ''
+    setTimeout(() => this.$('.uc-chat input')?.focus({ preventScroll: true }), 50)
+  }
+
+  get chatOpen() {
+    return this.chat.classList.contains('open')
+  }
+
+  closeChat() {
+    this.chat.classList.remove('open')
+    this.actions.chatClosed?.()
+  }
+
+  /** Add a line to the chat. `who` is 'them', 'you' or 'wait'; returns the element. */
+  say(who, text) {
+    const el = document.createElement('div')
+    el.className = `msg ${who}`
+    el.textContent = text
+    this.chatLog.appendChild(el)
+    this.chatLog.scrollTop = this.chatLog.scrollHeight
+    return el
+  }
+
+  chatNote(text) {
+    this.$('.uc-chat .sound').textContent = text || ''
   }
 
   toast(message, kind = '') {

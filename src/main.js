@@ -22,6 +22,7 @@ import { chipFace } from './agents/family.js'
 import { PEOPLE } from './agents/family.js'
 import { Life } from './life/index.js'
 import { PORTAL_URL } from './life/portal.js'
+import { WalkMode } from './core/walk.js'
 
 /**
  * Boot and the frame loop.
@@ -166,6 +167,8 @@ let selectedCastle = null
 const HOME_KEY = 'unlimitedcampus.home.v1'
 const DEFAULT_HOME = { azimuth: Math.PI / 4, polar: THREE.MathUtils.degToRad(56), distance: 150, x: 0, z: 6 }
 
+const walk = new WalkMode({ engine, rig, campus, nav, hud: null })
+
 const hud = new Hud(app, settings, {
   home: () => {
     rig.resetView()
@@ -193,6 +196,15 @@ const hud = new Hud(app, settings, {
     hud.setCrew(astronauts.group.visible)
   },
   vr: () => vr.toggle?.(),
+  walk: () => {
+    walk.toggle()
+    if (walk.active) hud.toast('Dropped in. WASD to walk, drag to look, Esc to fly again.')
+  },
+  talk: () => talkToNearest(),
+  ask: (text) => askTeacher(text),
+  chatClosed: () => {
+    chat.with = null
+  },
   flyTo: (id) => flyTo(id),
   cardClosed: () => {
     following = null
@@ -204,6 +216,7 @@ const hud = new Hud(app, settings, {
   },
 })
 hud.setCrew(true)
+walk.hud = hud
 
 function flyTo(id) {
   const c = campus.castles.get(id)
@@ -285,6 +298,100 @@ function cardFor(hit) {
   }
   const info = INFO[hit.tag]
   return info ? { kicker: 'Campus', title: info[0], text: info[1], accent: BRAND.purple } : null
+}
+
+// ── talking to the teachers ──────────────────────────────────────────────────────────────
+// The Brain holds the characters, the Claude key and the voices: /api/teacher-chat answers in
+// character, /api/teacher-voice speaks the answer. Walk up to someone and press E, or click them.
+const BRAIN = 'https://brain.kcproto.com'
+const chat = { with: null, history: [], audio: null, busy: false }
+
+function teacherFor(id) {
+  return FAMOUS.find((f) => f.id === id) || null
+}
+
+/** Whoever you are standing closest to, if they are close enough to talk to. */
+function nearestTeacher(maxDist = 5) {
+  if (!walk.active) return null
+  let best = null
+  let bestD = maxDist
+  for (const p of people.list) {
+    const info = PEOPLE[p.id]
+    if (!info) continue
+    const d = Math.hypot(p.pos.x - walk.pos.x, p.pos.z - walk.pos.z)
+    if (d < bestD) {
+      bestD = d
+      best = p
+    }
+  }
+  return best
+}
+
+function startChat(id) {
+  const info = PEOPLE[id]
+  if (!info) return
+  const famous = teacherFor(id)
+  chat.with = id
+  chat.history = []
+  hud.openChat({ name: info.name, known: famous?.known || info.role || '', face: chipFace(id) })
+  if (!famous) {
+    hud.say('them', `${info.name.split(' ')[0]} is here to show you round rather than teach — try one of the famous teachers.`)
+    return
+  }
+  const first = { socrates: 'Ah. You walked all the way over here. What is on your mind?' }[id]
+  hud.say('them', first || `${info.name} turns to you. Ask them anything.`)
+}
+
+function talkToNearest() {
+  const p = nearestTeacher()
+  if (p) startChat(p.id)
+}
+
+async function askTeacher(text) {
+  if (!chat.with || chat.busy) return
+  const famous = teacherFor(chat.with)
+  if (!famous) return
+  hud.say('you', text)
+  const waiting = hud.say('wait', 'thinking…')
+  chat.busy = true
+  try {
+    const res = await fetch(`${BRAIN}/api/teacher-chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ teacher: chat.with, message: text, history: chat.history }),
+    })
+    const data = await res.json()
+    waiting.remove()
+    if (!res.ok || !data.reply) {
+      hud.say('them', 'Sorry, I could not find the words just then. Try me again.')
+      return
+    }
+    hud.say('them', data.reply)
+    chat.history.push({ role: 'user', content: text }, { role: 'assistant', content: data.reply })
+    speak(data.reply, data.voice)
+  } catch (err) {
+    waiting.remove()
+    hud.say('them', 'Sorry, I could not find the words just then. Try me again.')
+    console.warn('teacher chat', err)
+  } finally {
+    chat.busy = false
+  }
+}
+
+/** Fish Audio, through the Brain (it holds the key and caches the clip). */
+function speak(text, voice) {
+  if (!voice) return
+  try {
+    chat.audio?.pause()
+    hud.chatNote('🔊 speaking…')
+    const audio = new Audio(`${BRAIN}/api/teacher-voice?voice=${encodeURIComponent(voice)}&text=${encodeURIComponent(text.slice(0, 700))}`)
+    chat.audio = audio
+    audio.onended = () => hud.chatNote('')
+    audio.onerror = () => hud.chatNote('(no voice for this one)')
+    audio.play().catch(() => hud.chatNote('Tap the page once to allow sound.'))
+  } catch (err) {
+    hud.chatNote('')
+  }
 }
 
 /** Through the portal: a shimmer in UA purple washes the screen, then you're at the School of Brain. */
@@ -497,6 +604,10 @@ rig.onUnfollow = () => {
 function findPerson(id) {
   const p = people.get(id)
   if (!p) return
+  if (walk.active && teacherFor(id)) {
+    startChat(id)
+    return
+  }
   if (following === id) {
     following = null
     rig.follow(null)
@@ -512,7 +623,7 @@ function findPerson(id) {
   const info = PEOPLE[id]
   p.g.userData.setExpression?.('happy')
   if (info.famous) {
-    hud.showCard({ kicker: 'Famous teacher', image: chipFace(id), square: true, title: info.name, text: `${info.known}. ${info.edu}`, accent: BRAND.lime })
+    hud.showCard({ kicker: 'Famous teacher', image: chipFace(id), square: true, title: info.name, text: `${info.known}. ${info.edu}`, accent: BRAND.lime, actions: [{ label: `Talk to ${info.name.split(' ')[0]}`, fn: () => startChat(id), primary: true }] })
     return
   }
   hud.showCard({ kicker: info.role, title: info.name, text: info.intro, accent: id === 'alan' ? BRAND.purple : '#159daf' })
@@ -605,7 +716,13 @@ engine.add({
       if (timeTween.t >= 1) timeTween = null
     }
     if (vr.active) vr.update(dt)
+    else if (walk.active) walk.update(dt)
     else rig.update(dt)
+    if (walk.active && !hud.chatOpen) {
+      const near = nearestTeacher()
+      hud.showPrompt(near ? PEOPLE[near.id]?.name : null)
+      nearId = near ? near.id : null
+    }
     sky.setFocus(vr.active ? vr.player.position : rig.target)
     sky.update(dt, elapsed, engine.camera)
     // the campus lights come up as the sun goes down: windows, lamps, neon bands, bloom
@@ -628,6 +745,13 @@ engine.add({
     }
     engine.setFocusDistance?.(rig.distance)
   },
+})
+
+// E talks to whoever you are standing next to
+let nearId = null
+addEventListener('keydown', (e) => {
+  if (e.code === 'KeyE' && walk.active && nearId && !hud.chatOpen) startChat(nearId)
+  if (e.code === 'Escape' && hud.chatOpen) hud.closeChat()
 })
 
 // ── go ──────────────────────────────────────────────────────────────────────────────────
@@ -677,4 +801,4 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
 engine.canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); console.warn('webgl context lost'); hud.toast('Graphics context lost, reloading…', 'err'); setTimeout(() => location.reload(), 1500) })
 
 // handy for probes
-window.__campus = { engine, rig, sky, campus, astronauts, roster, settings, hud, vr, people, playBadge, fireworks, life, LITE }
+window.__campus = { engine, rig, sky, campus, astronauts, roster, settings, hud, vr, people, playBadge, fireworks, life, walk, startChat, LITE }
