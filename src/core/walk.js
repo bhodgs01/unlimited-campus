@@ -149,10 +149,15 @@ export class WalkMode {
     this.vel.x = THREE.MathUtils.damp(this.vel.x, moving ? wantX : 0, ACCEL, dt)
     this.vel.z = THREE.MathUtils.damp(this.vel.z, moving ? wantZ : 0, ACCEL, dt)
 
-    // step, sliding along whatever refuses the step so corners don't trap you
+    // step, sliding along whatever refuses the step so corners don't trap you. If you somehow
+    // start inside something (dropped in on a building, walked onto a stage), collision is off
+    // until you are clear, so you can always walk out.
     const nx = this.pos.x + this.vel.x * dt
     const nz = this.pos.z + this.vel.z * dt
-    if (this._free(nx, nz)) {
+    if (!this._free(this.pos.x, this.pos.z)) {
+      this.pos.x = nx
+      this.pos.z = nz
+    } else if (this._free(nx, nz)) {
       this.pos.x = nx
       this.pos.z = nz
     } else if (this._free(nx, this.pos.z)) {
