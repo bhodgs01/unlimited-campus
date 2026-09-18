@@ -81,13 +81,15 @@ export class CourseHall {
     parent.add(dome, cap, ring)
     // firelight: a few warm points are what make stone look like stone indoors
     for (const l of lights) {
-      const light = new THREE.PointLight(0xffb066, l.power ?? 2.6, l.reach ?? 17, 1.6)
+      const light = new THREE.PointLight(0xffb066, (l.power ?? 2.6) * 1.8, l.reach ?? 20, 1.4)
       light.position.set(l.x, l.y ?? 2.6, l.z)
       parent.add(light)
     }
-    const fill = new THREE.PointLight(0xbfa9ff, 0.7, radius * 2.4, 1.4)
+    const fill = new THREE.PointLight(0xbfa9ff, 1.1, radius * 2.6, 1.3)
     fill.position.set(0, height - 1.6, 0)
-    parent.add(fill)
+    // a soft indoor ambient so the far wall is not pitch black
+    const amb = new THREE.HemisphereLight(0x8f7fd0, 0x2a2430, 0.55)
+    parent.add(fill, amb)
   }
 
   _build() {
@@ -232,16 +234,13 @@ export class CourseHall {
     mesh.geometry.computeBoundingBox()
     const s = mesh.geometry.boundingBox.getSize(new THREE.Vector3())
     const faceAspect = (s.x || 1) / (s.y || 1)
+    // Resize the panel rather than the texture. Scaling UVs smears the edge pixels of a portrait
+    // video across the whole wall (clamped wrapping has no border colour); shrinking the panel
+    // pillarboxes it properly and leaves the frame visible round it.
     const k = mediaAspect / faceAspect
-    texture.center.set(0.5, 0.5)
-    if (k > 1) {
-      // media is wider than the face: bars top and bottom
-      texture.repeat.set(1, k)
-      texture.offset.set(0, (1 - k) / 2)
-    } else {
-      texture.repeat.set(1 / k, 1)
-      texture.offset.set((1 - 1 / k) / 2, 0)
-    }
+    mesh.scale.set(k < 1 ? k : 1, k > 1 ? 1 / k : 1, 1)
+    texture.repeat.set(1, 1)
+    texture.offset.set(0, 0)
     texture.needsUpdate = true
   }
 
