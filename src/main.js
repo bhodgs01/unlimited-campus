@@ -474,6 +474,7 @@ function enterCastle(castleId) {
     astronauts.group.visible = false
     people.list.forEach((pp) => (pp.g.visible = false))
     labels.toggle(false)
+    duskTheRoom(true)
     if (!walk.active) walk.enter()
     walk.pos.set(inside.hall.entrance.x, 0, inside.hall.entrance.z)
     walk.yaw = inside.hall.entrance.yaw
@@ -504,6 +505,7 @@ function leaveCastle() {
     hud.showMedia(null)
     hud.showQuest(null)
     hud.closeChat()
+    duskTheRoom(false)
     walk.setBounds(null)
     const back = inside.saved
     const c = campus.castles.get(course.castle)
@@ -515,6 +517,26 @@ function leaveCastle() {
       if (c) rig.focus(new THREE.Vector3(c.x, 0, c.z), { distance: 58 })
     }
   })
+}
+
+/**
+ * Indoors the campus sun would pour straight through the roof (the dome casts no shadow), so
+ * while you are inside we turn the daylight down to almost nothing and let the braziers do it.
+ */
+const daylight = { saved: null }
+function duskTheRoom(on) {
+  const lights = []
+  engine.scene.traverse((o) => {
+    if (o.isDirectionalLight || o.isHemisphereLight || o.isAmbientLight) lights.push(o)
+  })
+  if (on) {
+    if (daylight.saved) return
+    daylight.saved = lights.map((l) => ({ l, i: l.intensity }))
+    for (const { l } of daylight.saved) l.intensity *= l.isHemisphereLight ? 0.1 : 0.04
+  } else {
+    for (const { l, i } of daylight.saved || []) l.intensity = i
+    daylight.saved = null
+  }
 }
 
 /**

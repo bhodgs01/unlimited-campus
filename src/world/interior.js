@@ -23,6 +23,7 @@ const WALL_SEGMENTS = 18
 export class CourseHall {
   constructor(scene, course, { shadows = true, castleAccent = '#E501FF' } = {}) {
     this.course = course
+    this.district = course.castle
     this.shadows = shadows
     this.accent = castleAccent
     this.group = new THREE.Group()
@@ -41,7 +42,7 @@ export class CourseHall {
   }
 
   _piece(name, x, z, { ry = 0, scale, palette, tag, id, parent = this.group } = {}) {
-    const b = build(name, { district: 'plaza', seed: 7, shadows: this.shadows, scale, palette })
+    const b = build(name, { district: this.district, seed: 7, shadows: this.shadows, scale, palette })
     if (!b) return null
     b.root.position.set(x, 0, z)
     b.root.rotation.y = ry
@@ -187,10 +188,16 @@ export class CourseHall {
 
     this.pod = { module, group: g, x: INTERIOR_ORIGIN.x + cx, z: INTERIOR_ORIGIN.z + cz, yaw: -a + P / 2 }
     // where you land when you step through the gate, and which way you face
-    // stand behind the bench, facing the screen
-    this.pod.stand = { x: this.pod.x - Math.cos(a) * 2.2, z: this.pod.z - Math.sin(a) * 2.2 }
+    // stand behind the bench looking at the screen, worked out in the pod's own frame so it is
+    // right whichever gate you came through (the screen sits at local z = -4.6)
+    g.updateMatrixWorld(true)
+    const standLocal = new THREE.Vector3(0, 0, 2.4)
+    const screenLocal = new THREE.Vector3(0, 0, -4.6)
+    const standWorld = g.localToWorld(standLocal.clone())
+    const screenWorld = g.localToWorld(screenLocal.clone())
+    this.pod.stand = { x: standWorld.x + INTERIOR_ORIGIN.x, z: standWorld.z + INTERIOR_ORIGIN.z }
     this.pod.radius = 6.6
-    this.pod.yawToScreen = Math.atan2(Math.cos(a), Math.sin(a)) + P / 2
+    this.pod.yawToScreen = Math.atan2(screenWorld.x - standWorld.x, screenWorld.z - standWorld.z)
     return this.pod
   }
 
