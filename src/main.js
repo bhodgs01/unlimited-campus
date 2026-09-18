@@ -598,7 +598,13 @@ async function openModule(n) {
   stopMedia()
   const pod = inside.hall.openPod(module)
   inside.module = module
-  walk.goTo(pod.stand.x, pod.stand.z, { stop: 0.6, onArrive: () => (walk.yaw = pod.yawToScreen) })
+  // a gate is a portal: step through it and you are in front of the screen, facing it
+  fadeThrough(() => {
+    walk.cancelTravel()
+    walk.pos.set(pod.stand.x, 0, pod.stand.z)
+    walk.yaw = pod.yawToScreen
+    walk.pitch = -0.02
+  })
   showCourseHud()
   const all = await loadMedia()
   const files = all?.[course.id]?.[String(n)] || {}
@@ -610,10 +616,27 @@ async function openModule(n) {
   if (files.infographic) items.push({ label: '🖼 Infographic', fn: () => showInfographic(base + files.infographic) })
   if (files.pdf) items.push({ label: '📄 Read', fn: () => window.open(base + files.pdf, '_blank', 'noopener') })
   items.push({ label: '✓ Mark done', fn: () => completeModule(n) })
+  items.push({ label: '← Hall', fn: () => backToHall() })
   hud.showMedia(items.length ? items : [{ label: 'Media is still being copied over', fn: () => {} }])
   hud.showQuest({ kicker: `Module ${n} quest`, text: module.quest, actions: [{ label: 'Done', primary: true, fn: () => completeModule(n) }] })
   if (files.infographic) showInfographic(base + files.infographic)
   else paintPlaceholder(module)
+}
+
+/** Back out of a pod into the hall, facing the dais. */
+function backToHall() {
+  if (!inside.hall) return
+  stopMedia()
+  fadeThrough(() => {
+    inside.hall.closePod()
+    inside.module = null
+    walk.cancelTravel()
+    walk.pos.set(inside.hall.entrance.x, 0, inside.hall.entrance.z)
+    walk.yaw = inside.hall.entrance.yaw
+    hud.showMedia(null)
+    hud.showQuest(null)
+    showCourseHud()
+  })
 }
 
 /** Until the media lands, the screen shows the module's own title rather than a black slab. */
