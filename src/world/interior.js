@@ -160,8 +160,8 @@ export class CourseHall {
     floorRing.position.y = 0.07
     // and a soft column of light standing in it, visible from the door
     const beam = new THREE.Mesh(
-      new THREE.CylinderGeometry(1.7, 2.3, 6.4, 28, 1, true),
-      new THREE.MeshBasicMaterial({ color: this.accent, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false })
+      new THREE.CylinderGeometry(1.2, 1.8, 5.2, 24, 1, true),
+      new THREE.MeshBasicMaterial({ color: this.accent, transparent: true, opacity: 0.045, side: THREE.DoubleSide, depthWrite: false })
     )
     beam.position.y = 3.4
     this.group.add(ring, floorRing, beam)
@@ -285,20 +285,27 @@ export class CourseHall {
     // The brief asked for the paintable face to be a single flat quad, and GPT delivered exactly
     // that: a mesh whose depth is 0. Prefer those over the merely thin backing panels in front of
     // them, or the video lands on the frame and the real screen stays blank.
-    let best = null
-    let bestScore = -1
-    built.root.traverse((o) => {
-      if (!o.isMesh || !o.geometry) return
-      o.geometry.computeBoundingBox()
-      const s = o.geometry.boundingBox.getSize(new THREE.Vector3())
-      if (s.z > 0.08) return
-      const area = s.x * s.y
-      const score = area + (s.z < 0.001 ? 1000 : 0)
-      if (score > bestScore) {
-        bestScore = score
-        best = o
-      }
-    })
+    let best = built.root.userData.paintTarget || null
+    if (!best) {
+      let bestScore = -1
+      built.root.traverse((o) => {
+        if (!o.isMesh || !o.geometry || o.userData.isBackdrop) return
+        o.geometry.computeBoundingBox()
+        const s = o.geometry.boundingBox.getSize(new THREE.Vector3())
+        if (s.z > 0.08) return
+        const area = s.x * s.y
+        const score = area + (s.z < 0.001 ? 1000 : 0)
+        if (score > bestScore) {
+          bestScore = score
+          best = o
+        }
+      })
+      // remember it: the backdrop added below is also a flat quad, and a little bigger, so a
+      // second paint would land on that instead and leave the first one showing
+      built.root.userData.paintTarget = best
+    }
+    // a new thing on the screen starts at full size; fit() shrinks it again if it needs to
+    best?.scale.set(1, 1, 1)
     if (!best) return null
     best.material = new THREE.MeshBasicMaterial({ map: texture, toneMapped: false, color: 0xffffff })
     texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping
@@ -314,6 +321,7 @@ export class CourseHall {
       )
       back.position.copy(centre)
       back.position.z -= 0.012
+      back.userData.isBackdrop = true
       best.parent?.add(back)
       best.userData.backdrop = back
     }
@@ -333,7 +341,7 @@ export class CourseHall {
       this.centreRing.rotation.z += dt * 0.25
     }
     if (this.centreFloor) this.centreFloor.material.opacity = 0.28 + 0.2 * Math.sin(elapsed * 2.2 + 1)
-    if (this.centreBeam) this.centreBeam.material.opacity = 0.09 + 0.05 * Math.sin(elapsed * 1.6)
+    if (this.centreBeam) this.centreBeam.material.opacity = 0.035 + 0.02 * Math.sin(elapsed * 1.6)
     for (const g of this.gates) if (g.pad) g.pad.material.opacity = g.done ? 0.28 : pulse
   }
 
