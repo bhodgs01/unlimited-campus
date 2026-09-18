@@ -55,24 +55,63 @@ export class CourseHall {
     return b
   }
 
+  /**
+    * The room has to be a room: a dark dome over the top so the campus sky does not pour in, and
+    * warm lights of its own so the stone is lit by fire rather than by the sun.
+    */
+  _shell(parent, radius, height, { lights = [] } = {}) {
+    const dome = new THREE.Mesh(
+      new THREE.CylinderGeometry(radius, radius, height, 40, 1, true),
+      new THREE.MeshStandardMaterial({ color: 0x1b1a22, roughness: 1, side: THREE.BackSide })
+    )
+    dome.position.y = height / 2 - 0.2
+    const cap = new THREE.Mesh(
+      new THREE.SphereGeometry(radius, 36, 12, 0, Math.PI * 2, 0, Math.PI / 2),
+      new THREE.MeshStandardMaterial({ color: 0x15141b, roughness: 1, side: THREE.BackSide })
+    )
+    cap.position.y = height - 0.2
+    cap.scale.y = 0.42
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(radius - 0.35, 0.09, 8, 48),
+      new THREE.MeshStandardMaterial({ color: this.accent, emissive: this.accent, emissiveIntensity: 1.5 })
+    )
+    ring.rotation.x = P / 2
+    ring.position.y = height - 1.1
+    parent.add(dome, cap, ring)
+    // firelight: a few warm points are what make stone look like stone indoors
+    for (const l of lights) {
+      const light = new THREE.PointLight(0xffb066, l.power ?? 2.6, l.reach ?? 17, 1.6)
+      light.position.set(l.x, l.y ?? 2.6, l.z)
+      parent.add(light)
+    }
+    const fill = new THREE.PointLight(0xbfa9ff, 0.7, radius * 2.4, 1.4)
+    fill.position.set(0, height - 1.6, 0)
+    parent.add(fill)
+  }
+
   _build() {
     const pal = { ACCENT: this.accent }
     // floor and the ring of walls
-    this._piece('coursehallfloor', 0, 0, { scale: 1.7 * 3.1, palette: pal })
+    this._piece('coursehallfloor', 0, 0, { scale: 1.7 * 2.6, palette: pal })
     for (let i = 0; i < WALL_SEGMENTS; i++) {
       const a = (i / WALL_SEGMENTS) * P * 2
       // leave a gap for the way out
       if (Math.abs(Math.atan2(Math.sin(a - P), Math.cos(a - P))) < 0.22) continue
-      this._piece('coursehallwall', Math.cos(a) * HALL_R, Math.sin(a) * HALL_R, { ry: -a + P / 2, scale: 1.7 * 1.25, palette: pal })
+      this._piece('coursehallwall', Math.cos(a) * HALL_R, Math.sin(a) * HALL_R, { ry: -a + P / 2, scale: 1.7 * 1.05, palette: pal })
     }
 
     // the dais, its banners and the braziers
-    this._piece('conciergedais', 0, 0, { scale: 1.7 * 1.5, palette: pal })
-    for (const s of [-1, 1]) this._piece('hallbanner', s * 3.1, -1.6, { ry: s * 0.25, scale: 1.7 * 1.3, palette: pal })
+    this._piece('conciergedais', 0, 0, { scale: 1.7 * 0.85, palette: pal })
+    for (const s of [-1, 1]) this._piece('hallbanner', s * 2.6, -1.9, { ry: s * 0.25, scale: 1.7 * 0.9, palette: pal })
+    const braziers = []
     for (let i = 0; i < 4; i++) {
       const a = P / 4 + (i * P) / 2
-      this._piece('hallbrazier', Math.cos(a) * (HALL_R - 2.4), Math.sin(a) * (HALL_R - 2.4), { scale: 1.7 * 1.2, palette: pal })
+      const bx = Math.cos(a) * (HALL_R - 2.4)
+      const bz = Math.sin(a) * (HALL_R - 2.4)
+      this._piece('hallbrazier', bx, bz, { scale: 1.7 * 0.9, palette: pal })
+      braziers.push({ x: bx, z: bz, y: 2.9, power: 2.4 })
     }
+    this._shell(this.group, HALL_R + 1.6, 7.4, { lights: braziers })
 
     // one gate per module, evenly round the far side of the room
     const n = this.course.modules.length
@@ -82,18 +121,19 @@ export class CourseHall {
       const x = Math.cos(a) * (HALL_R - 0.4)
       const z = Math.sin(a) * (HALL_R - 0.4)
       const ry = -a + P / 2
-      const gate = this._piece('modulegate', x, z, { ry, scale: 1.7 * 1.15, palette: pal, tag: 'module', id: `${this.course.id}:${m.n}` })
-      const num = this._piece('modulegatenumber', x - Math.cos(a) * 1.5, z - Math.sin(a) * 1.5, { ry, scale: 1.7 * 0.85, palette: pal })
+      const gate = this._piece('modulegate', x, z, { ry, scale: 1.7 * 0.95, palette: pal, tag: 'module', id: `${this.course.id}:${m.n}` })
+      const num = this._piece('modulegatenumber', x - Math.cos(a) * 1.3, z - Math.sin(a) * 1.3, { ry, scale: 1.7 * 0.6, palette: pal })
       this.gates.push({ m, gate, num, x, z, a, ry, done: false })
     }
 
     // progress pillar and the trophy shelf, either side of the way out
-    this.pillar = this._piece('progresspillar', -3.4, HALL_R - 2.2, { scale: 1.7 * 1.2, palette: pal })
-    this._piece('badgetrophyshelf', 3.6, HALL_R - 2.0, { ry: -P * 0.15, scale: 1.7 * 1.2, palette: pal, tag: 'trophies', id: this.course.id })
-    this.cannons = [-1, 1].map((s) => this._piece('confetticannon', s * 2.2, -3.2, { ry: s * 0.4, scale: 1.7 * 1.1, palette: pal }))
+    this.pillar = this._piece('progresspillar', -3.4, HALL_R - 2.6, { scale: 1.7 * 0.9, palette: pal })
+    this._piece('badgetrophyshelf', 3.6, HALL_R - 2.4, { ry: -P * 0.15, scale: 1.7 * 0.9, palette: pal, tag: 'trophies', id: this.course.id })
+    this.cannons = [-1, 1].map((s) => this._piece('confetticannon', s * 2.0, -3.0, { ry: s * 0.4, scale: 1.7 * 0.8, palette: pal }))
 
     // where you stand when you walk in, and where the guide stands
-    this.entrance = { x: INTERIOR_ORIGIN.x, z: INTERIOR_ORIGIN.z + HALL_R - 2.6 }
+    this.entrance = { x: INTERIOR_ORIGIN.x, z: INTERIOR_ORIGIN.z + HALL_R - 2.2, yaw: P }
+    this.radius = HALL_R - 0.9
     this.guideSpot = { x: INTERIOR_ORIGIN.x, z: INTERIOR_ORIGIN.z - 0.4, y: 0.55 }
   }
 
@@ -132,21 +172,25 @@ export class CourseHall {
     const pal = { ACCENT: this.accent }
     const piece = (name, x, z, opts = {}) => this._piece(name, x, z, { ...opts, palette: pal, parent: g })
 
-    piece('coursehallfloor', 0, 0, { scale: 1.7 * 2.0 })
+    piece('coursehallfloor', 0, 0, { scale: 1.7 * 1.9 })
     // the cinema wall faces you as you step in
-    this.screen = piece('cinemawall', 0, -5.6, { scale: 1.7 * 1.5, tag: 'screen', id: `${this.course.id}:${module.n}` })
-    piece('listeningbench', 0, 0.6, { ry: P, scale: 1.7 * 1.2 })
-    piece('beanbagcluster', -3.4, 0.4, { ry: 0.6, scale: 1.7 * 1.1 })
-    this.infoWall = piece('infographicwall', 5.2, -2.4, { ry: -P / 2.6, scale: 1.7 * 1.3, tag: 'infographic', id: `${this.course.id}:${module.n}` })
-    this.lectern = piece('readerlectern', -5.2, -2.2, { ry: P / 2.6, scale: 1.7 * 1.2, tag: 'reader', id: `${this.course.id}:${module.n}` })
-    piece('podcaststand', 2.6, 1.2, { ry: -0.5, scale: 1.7 * 1.1, tag: 'podcast', id: `${this.course.id}:${module.n}` })
-    this.questProp = piece(this.course.quest, -1.0, 3.6, { ry: P * 0.9, scale: 1.7 * 1.2, tag: 'quest', id: `${this.course.id}:${module.n}` })
-    if (this.course.id === 'gratitude') piece('gratitudejournal', 2.4, 3.4, { ry: -P * 0.8, scale: 1.7 * 1.1, tag: 'quest', id: `${this.course.id}:${module.n}` })
-    for (const s of [-1, 1]) piece('hallbrazier', s * 6.2, 2.4, { scale: 1.7 * 1.1 })
+    this.screen = piece('cinemawall', 0, -4.6, { scale: 1.7 * 1.05, tag: 'screen', id: `${this.course.id}:${module.n}` })
+    piece('listeningbench', 0, -0.4, { ry: P, scale: 1.7 * 0.85 })
+    piece('beanbagcluster', -2.9, 0.2, { ry: 0.6, scale: 1.7 * 0.8 })
+    this.infoWall = piece('infographicwall', 4.4, -2.2, { ry: -P / 2.8, scale: 1.7 * 0.95, tag: 'infographic', id: `${this.course.id}:${module.n}` })
+    this.lectern = piece('readerlectern', -4.4, -2.0, { ry: P / 2.8, scale: 1.7 * 0.85, tag: 'reader', id: `${this.course.id}:${module.n}` })
+    piece('podcaststand', 2.4, 0.8, { ry: -0.5, scale: 1.7 * 0.8, tag: 'podcast', id: `${this.course.id}:${module.n}` })
+    this.questProp = piece(this.course.quest, -1.2, 2.8, { ry: P * 0.9, scale: 1.7 * 0.85, tag: 'quest', id: `${this.course.id}:${module.n}` })
+    if (this.course.id === 'gratitude') piece('gratitudejournal', 2.2, 2.6, { ry: -P * 0.8, scale: 1.7 * 0.8, tag: 'quest', id: `${this.course.id}:${module.n}` })
+    for (const s of [-1, 1]) piece('hallbrazier', s * 5.0, 1.8, { scale: 1.7 * 0.8 })
+    this._shell(g, 7.4, 6.2, { lights: [{ x: -5, z: 1.8, y: 2.6, power: 2.2 }, { x: 5, z: 1.8, y: 2.6, power: 2.2 }, { x: 0, z: -3.4, y: 3.0, power: 1.8, reach: 12 }] })
 
     this.pod = { module, group: g, x: INTERIOR_ORIGIN.x + cx, z: INTERIOR_ORIGIN.z + cz, yaw: -a + P / 2 }
     // where you land when you step through the gate, and which way you face
-    this.pod.stand = { x: this.pod.x - Math.cos(a) * 3.4, z: this.pod.z - Math.sin(a) * 3.4 }
+    // stand behind the bench, facing the screen
+    this.pod.stand = { x: this.pod.x - Math.cos(a) * 2.2, z: this.pod.z - Math.sin(a) * 2.2 }
+    this.pod.radius = 6.6
+    this.pod.yawToScreen = Math.atan2(Math.cos(a), Math.sin(a)) + P / 2
     return this.pod
   }
 

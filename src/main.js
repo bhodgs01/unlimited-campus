@@ -23,7 +23,7 @@ import { PEOPLE } from './agents/family.js'
 import { Life } from './life/index.js'
 import { PORTAL_URL } from './life/portal.js'
 import { WalkMode } from './core/walk.js'
-import { CourseHall } from './world/interior.js'
+import { CourseHall, INTERIOR_ORIGIN } from './world/interior.js'
 import { COURSES, GUIDES as COURSE_GUIDES, courseForCastle } from './data/courses.js'
 
 /**
@@ -476,9 +476,10 @@ function enterCastle(castleId) {
     labels.toggle(false)
     if (!walk.active) walk.enter()
     walk.pos.set(inside.hall.entrance.x, 0, inside.hall.entrance.z)
-    walk.yaw = Math.PI
+    walk.yaw = inside.hall.entrance.yaw
     walk.pitch = -0.02
     walk.cancelTravel()
+    walk.setBounds(insideBounds)
     hud.closeCard()
     showCourseHud()
     greetGuide(course)
@@ -503,6 +504,7 @@ function leaveCastle() {
     hud.showMedia(null)
     hud.showQuest(null)
     hud.closeChat()
+    walk.setBounds(null)
     const back = inside.saved
     const c = campus.castles.get(course.castle)
     if (back?.walk && c) {
@@ -513,6 +515,29 @@ function leaveCastle() {
       if (c) rig.focus(new THREE.Vector3(c.x, 0, c.z), { distance: 58 })
     }
   })
+}
+
+/**
+ * Where you may stand inside a castle: within the hall, within the open pod, or in the short
+ * stretch between the two. Everything else is 4 km of nothing.
+ */
+function insideBounds(x, z) {
+  const hall = inside.hall
+  if (!hall) return true
+  const hx = x - INTERIOR_ORIGIN.x
+  const hz = z - INTERIOR_ORIGIN.z
+  if (Math.hypot(hx, hz) < hall.radius) return true
+  const pod = hall.pod
+  if (pod) {
+    if (Math.hypot(x - pod.x, z - pod.z) < pod.radius) return true
+    // the walk between the gate and the pod
+    const dx = pod.x - INTERIOR_ORIGIN.x
+    const dz = pod.z - INTERIOR_ORIGIN.z
+    const len = Math.hypot(dx, dz) || 1
+    const t = Math.max(0, Math.min(1, (hx * dx + hz * dz) / (len * len)))
+    if (Math.hypot(hx - dx * t, hz - dz * t) < 2.2) return true
+  }
+  return false
 }
 
 /** A short wash of UA purple over the screen, so entering and leaving is a moment. */
@@ -551,7 +576,7 @@ async function openModule(n) {
   stopMedia()
   const pod = inside.hall.openPod(module)
   inside.module = module
-  walk.goTo(pod.stand.x, pod.stand.z, { stop: 0.6 })
+  walk.goTo(pod.stand.x, pod.stand.z, { stop: 0.6, onArrive: () => (walk.yaw = pod.yawToScreen) })
   showCourseHud()
   const all = await loadMedia()
   const files = all?.[course.id]?.[String(n)] || {}

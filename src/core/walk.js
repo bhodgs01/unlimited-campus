@@ -147,10 +147,19 @@ export class WalkMode {
     return this.campus.groundY ? this.campus.groundY(x, z) : 0
   }
 
-  /** Can a person stand here? The nav grid knows buildings, trees and water. */
+  /**
+   * Can a person stand here? Outdoors that is the crowd's nav grid. Indoors the campus grid is
+   * meaningless (the room is 4 km away), so a room hands us its own bounds instead.
+   */
   _free(x, z) {
+    if (this.bounds) return this.bounds(x, z)
     if (this.nav?.isBlocked?.(x, z)) return false
     return true
+  }
+
+  /** A room takes over collision while you are in it; null hands it back to the campus. */
+  setBounds(fn) {
+    this.bounds = fn || null
   }
 
   update(dt) {
