@@ -205,9 +205,10 @@ const hud = new Hud(app, settings, {
   talk: () => talkToNearest(),
   leaveCastle: () => leaveCastle(),
   askGuide: () => inside.course && greetGuide(inside.course),
-  ask: (text) => askTeacher(text),
+  ask: (text) => (dm.with ? sendMessage(text) : askTeacher(text)),
   chatClosed: () => {
     chat.with = null
+    stopPersonChat()
   },
   flyTo: (id) => flyTo(id),
   cardClosed: () => {
@@ -325,6 +326,7 @@ function nearestTeacher(maxDist = 5) {
   for (const p of people.list) {
     const info = PEOPLE[p.id]
     if (!info) continue
+    if (p.id === me.id) continue // you cannot walk up to yourself
     const d = Math.hypot(p.pos.x - walk.pos.x, p.pos.z - walk.pos.z)
     if (d < bestD) {
       bestD = d
@@ -337,6 +339,7 @@ function nearestTeacher(maxDist = 5) {
 function startChat(id) {
   const info = PEOPLE[id]
   if (!info) return
+  if (me.canChat && REAL.includes(id) && id !== me.id) return startPersonChat(id)
   const famous = teacherFor(id)
   chat.with = id
   chat.history = []
@@ -407,6 +410,153 @@ function speak(text, voice) {
     hud.chatNote('')
   }
 }
+
+// ── messages between the real people on the campus ───────────────────────────────────────
+// Walking up to Blake or Alan opens a thread instead of a lesson. Messages live on the server,
+// so one of them can leave something and the other picks it up whenever they next sign in.
+// the people on the campus who have a thread; the server decides, because "unlimited" is a
+// shared guest login that walks around as nobody in particular
+let REAL = ['blake', 'alan']
+const me = { id: '', unread: {}, readonly: false, canChat: false }
+const dm = { with: null, since: 0, timer: 0 }
+const firstName = (id) => (PEOPLE[id]?.name || id).split(' ')[0]
+
+async function loadMe() {
+  try {
+    const res = await fetch('/api/me', { credentials: 'same-origin' })
+    if (!res.ok) return
+    const data = await res.json()
+    me.id = (data.me || '').toLowerCase()
+    if (Array.isArray(data.people) && data.people.length) REAL = data.people
+    me.canChat = Boolean(data.canChat)
+    me.unread = data.unread || {}
+    me.readonly = Boolean(data.readonly)
+    paintUnread()
+    announceUnread()
+  } catch (err) {
+    console.warn('who am I', err)
+  }
+}
+
+function paintUnread() {
+  for (const id of REAL) hud.setPersonBadge(id, me.unread[id] || 0)
+}
+
+/** On the way in: tell them someone left them something, and offer to open it. */
+function announceUnread() {
+  if (!me.canChat) return
+  const from = REAL.find((id) => id !== me.id && (me.unread[id] || 0) > 0)
+  if (!from) return
+  const n = me.unread[from]
+  hud.showCard({
+    kicker: 'Messages',
+    image: chipFace(from),
+    square: true,
+    title: `${firstName(from)} left you ${n} message${n === 1 ? '' : 's'}`,
+    text: 'They are waiting on the campus. Open the thread whenever you like.',
+    accent: BRAND.purple,
+    actions: [{ label: 'Read them', fn: () => startPersonChat(from), primary: true }],
+  })
+}
+
+async function startPersonChat(id) {
+  const info = PEOPLE[id]
+  if (!info || id === me.id || !me.canChat) return
+  chat.with = null
+  dm.with = id
+  dm.since = 0
+  hud.openChat({ name: info.name, known: info.role || '', face: chipFace(id), message: true })
+  hud.chatNote(me.readonly ? 'Offline copy of the campus: you can read, but messages will not send.' : '')
+  const had = await pullThread(true)
+  if (!had) hud.say('them', `Nothing here yet. Whatever you say, ${firstName(id)} will see next time they open the campus.`)
+  markRead(id)
+  clearInterval(dm.timer)
+  dm.timer = setInterval(() => pullThread(false), 4000)
+}
+
+function stopPersonChat() {
+  clearInterval(dm.timer)
+  dm.timer = 0
+  dm.with = null
+}
+
+/** Pull the thread. `reset` repaints the whole conversation; otherwise only what is new. */
+async function pullThread(reset) {
+  if (!dm.with) return false
+  try {
+    const res = await fetch(`/api/chat/thread?with=${encodeURIComponent(dm.with)}&since=${reset ? 0 : dm.since}`, {
+      credentials: 'same-origin',
+    })
+    if (!res.ok) return false
+    const data = await res.json()
+    if (reset) hud.clearChat()
+    for (const m of data.messages) {
+      hud.say(m.from === me.id ? 'you' : 'them', m.text)
+      dm.since = Math.max(dm.since, m.at)
+    }
+    // anything that arrived while the panel is open counts as read
+    if (data.messages.some((m) => m.from !== me.id)) markRead(dm.with)
+    return reset ? data.messages.length > 0 : true
+  } catch (err) {
+    console.warn('chat thread', err)
+    return false
+  }
+}
+
+async function sendMessage(text) {
+  if (!dm.with) return
+  const to = dm.with
+  hud.say('you', text)
+  try {
+    const res = await fetch('/api/chat/send', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to, text }),
+    })
+    const data = await res.json()
+    if (!res.ok || !data.message) {
+      hud.chatNote(data.error || 'That did not send. Try again.')
+      return
+    }
+    // remember where we got to, so the poll does not echo this message back at us
+    dm.since = Math.max(dm.since, data.message.at)
+    hud.chatNote(`Delivered. ${firstName(to)} sees it next time they open the campus.`)
+  } catch (err) {
+    hud.chatNote('Could not reach the campus. Try again.')
+    console.warn('chat send', err)
+  }
+}
+
+async function markRead(peer) {
+  if (!peer || me.readonly) return
+  try {
+    const res = await fetch('/api/chat/read', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ with: peer }),
+    })
+    if (!res.ok) return
+    me.unread = (await res.json()).unread || me.unread
+    paintUnread()
+  } catch (err) {
+    console.warn('chat read', err)
+  }
+}
+
+/** Keep the badges honest while you wander, so a message landing mid-session shows up. */
+setInterval(() => {
+  if (dm.with || !me.canChat) return // the open thread is already polling
+  fetch('/api/me', { credentials: 'same-origin' })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((d) => {
+      if (!d) return
+      me.unread = d.unread || {}
+      paintUnread()
+    })
+    .catch(() => {})
+}, 30000)
 
 // ── inside the castles: the courses ──────────────────────────────────────────────────────
 // A castle holds a course. Step inside and you are in its Course Hall: a gate per module, the
@@ -1075,10 +1225,10 @@ function findPerson(id) {
     const info = PEOPLE[id]
     if (Math.hypot(p.pos.x - walk.pos.x, p.pos.z - walk.pos.z) > 3) {
       hud.toast(`Walking over to ${info?.name?.split(' ')[0] || 'them'}…`)
-      walk.goTo(p.pos.x, p.pos.z, { onArrive: () => teacherFor(id) && startChat(id) })
+      walk.goTo(p.pos.x, p.pos.z, { onArrive: () => startChat(id) })
       return
     }
-    if (teacherFor(id)) startChat(id)
+    startChat(id)
     return
   }
   if (following === id) {
@@ -1099,7 +1249,16 @@ function findPerson(id) {
     hud.showCard({ kicker: 'Famous teacher', image: chipFace(id), square: true, title: info.name, text: `${info.known}. ${info.edu}`, accent: BRAND.lime, actions: [{ label: `Talk to ${info.name.split(' ')[0]}`, fn: () => startChat(id), primary: true }] })
     return
   }
-  hud.showCard({ kicker: info.role, title: info.name, text: info.intro, accent: id === 'alan' ? BRAND.purple : '#159daf' })
+  hud.showCard({
+    kicker: info.role,
+    title: info.name,
+    text: info.intro,
+    accent: id === 'alan' ? BRAND.purple : '#159daf',
+    actions:
+      me.canChat && REAL.includes(id) && id !== me.id
+        ? [{ label: `Message ${firstName(id)}`, fn: () => startPersonChat(id), primary: true }]
+        : undefined,
+  })
 }
 hud.setPeople(
   ['blake', 'alan'].map((id) => ({ id, name: PEOPLE[id].name.split(' ')[0], face: chipFace(id) })),
@@ -1240,6 +1399,7 @@ async function boot() {
     await people.preload()
     await people.add('alan', { x: 5, z: -8 })
     await people.add('blake', { x: -5, z: -8 })
+    loadMe()
     for (const f of FAMOUS) {
       // Socrates teaches the class in the amphitheater
       if (f.id === 'socrates' && life.lecture) {

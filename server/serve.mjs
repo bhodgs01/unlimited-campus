@@ -3,7 +3,8 @@ import fsp from 'node:fs/promises'
 import { createReadStream } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { needsAuth, hasValidAuth, checkPassword, makeSetCookie, loginPage, authEnabled } from './auth.mjs'
+import { needsAuth, hasValidAuth, checkPassword, makeSetCookie, loginPage, authEnabled, currentUser, knownUsers, chatUsers, canChat } from './auth.mjs'
+import { thread, send, markRead, unreadFor, chatReadonly } from './chat.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const DIST = path.join(here, '..', 'dist')
@@ -68,8 +69,9 @@ const server = http.createServer(async (req, res) => {
         } catch {
           /* bad body */
         }
-        if (checkPassword(pw, user)) {
-          res.writeHead(200, { 'Content-Type': 'application/json', 'Set-Cookie': makeSetCookie(), 'Cache-Control': 'no-store' }).end('{"ok":true}')
+        const who = checkPassword(pw, user)
+        if (who) {
+          res.writeHead(200, { 'Content-Type': 'application/json', 'Set-Cookie': makeSetCookie(who), 'Cache-Control': 'no-store' }).end('{"ok":true}')
         } else {
           res.writeHead(401, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end('{"ok":false}')
         }
@@ -84,6 +86,75 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }).end(loginPage())
       return
     }
+  }
+
+  // ── who you are, and the chat between the real people on the campus ─────────────────
+  const readJson = (req) =>
+    new Promise((resolve) => {
+      let body = ''
+      req.on('data', (c) => {
+        body += c
+        if (body.length > 8192) req.destroy()
+      })
+      req.on('end', () => {
+        try {
+          resolve(JSON.parse(body || '{}'))
+        } catch {
+          resolve({})
+        }
+      })
+    })
+  const json = (code, obj) =>
+    res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(obj))
+
+  if (url.pathname === '/api/me') {
+    const me = currentUser(req)
+    const mine = canChat(me)
+    json(200, {
+      me,
+      people: chatUsers(),
+      canChat: mine,
+      unread: mine ? unreadFor(me, chatUsers()) : {},
+      readonly: chatReadonly(),
+    })
+    return
+  }
+
+  if (url.pathname.startsWith('/api/chat')) {
+    const me = currentUser(req)
+    if (!me) return json(401, { error: 'sign in' })
+    // a shared guest login can walk the campus, but it is not one of the people on it
+    if (!canChat(me)) return json(403, { error: 'This login is shared, so it has no messages of its own.' })
+    const peer = String(url.searchParams.get('with') || '').toLowerCase()
+    const known = chatUsers()
+    const validPeer = (id) => known.includes(id) && id !== me
+
+    if (url.pathname === '/api/chat/thread' && req.method === 'GET') {
+      if (!validPeer(peer)) return json(400, { error: 'unknown person' })
+      const since = Number(url.searchParams.get('since')) || 0
+      return json(200, { messages: thread(me, peer, since), readonly: chatReadonly() })
+    }
+
+    if (url.pathname === '/api/chat/send' && req.method === 'POST') {
+      const body = await readJson(req)
+      const to = String(body.to || '').toLowerCase()
+      if (!validPeer(to)) return json(400, { error: 'unknown person' })
+      const out = send(me, to, body.text)
+      if (out.error === 'readonly') return json(503, { error: 'This is the offline copy of the campus. Your message would not reach them.' })
+      if (out.error === 'unwritable') return json(503, { error: 'The campus could not store that message. Try again in a moment.' })
+      if (out.error) return json(400, { error: out.error })
+      return json(200, out)
+    }
+
+    if (url.pathname === '/api/chat/read' && req.method === 'POST') {
+      const body = await readJson(req)
+      const p = String(body.with || '').toLowerCase()
+      if (!validPeer(p)) return json(400, { error: 'unknown person' })
+      markRead(me, p)
+      return json(200, { ok: true, unread: unreadFor(me, known) })
+    }
+
+    return json(404, { error: 'no such chat route' })
   }
 
   // ── the course media, streamed from the NAS ─────────────────────────────────────────

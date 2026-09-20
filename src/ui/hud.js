@@ -110,6 +110,8 @@ const CSS = `
 .uc-chat input{flex:1;min-width:0;background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:999px;padding:9px 13px;color:var(--text);font:inherit;font-size:13.5px}
 .uc-chat input:focus{outline:none;border-color:rgba(229,1,255,.6)}
 .uc-chat .sound{font-size:11px;color:var(--muted);padding:0 12px 9px;display:flex;align-items:center;gap:6px}
+.uc-people button{position:relative}
+.uc-people button .badge{position:absolute;top:-5px;right:-5px;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:#E501FF;color:#fff;font-size:10.5px;font-weight:700;line-height:17px;text-align:center;box-shadow:0 0 0 2px rgba(12,15,23,.9),0 0 10px rgba(229,1,255,.7)}
 .uc-prompt{position:absolute;left:50%;bottom:112px;transform:translateX(-50%);display:none;align-items:center;gap:9px;padding:9px 14px;border-radius:999px;pointer-events:auto;cursor:pointer;font-size:13.5px}
 .uc-prompt.open{display:flex}
 .uc-prompt kbd{background:rgba(255,255,255,.1);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font:inherit;font-size:11.5px}
@@ -467,7 +469,7 @@ export class Hud {
     this.prompt.classList.add('open')
   }
 
-  openChat({ name, known, face }) {
+  openChat({ name, known, face, message = false }) {
     this.showPrompt(null)
     this.closeCard()
     this.chat.classList.add('open')
@@ -476,9 +478,37 @@ export class Hud {
     img.style.display = face ? '' : 'none'
     this.$('.uc-chat .head b').textContent = name
     this.$('.uc-chat .head small').textContent = known || ''
+    // you ask a teacher a question; you send a person a message
+    const input = this.$('.uc-chat input')
+    const first = String(name || '').split(' ')[0]
+    input.placeholder = message ? `Message ${first}…` : 'Ask them something…'
+    input.maxLength = message ? 2000 : 300
+    this.$('.uc-chat button[type="submit"]').textContent = message ? 'Send' : 'Ask'
     this.chatLog.innerHTML = ''
     this.$('.uc-chat .sound').textContent = ''
     setTimeout(() => this.$('.uc-chat input')?.focus({ preventScroll: true }), 50)
+  }
+
+  /** Empty the thread without closing the panel (a person chat reloads from the server). */
+  clearChat() {
+    this.chatLog.innerHTML = ''
+  }
+
+  /** The purple dot on someone's find-me chip: how many messages are waiting from them. */
+  setPersonBadge(id, count) {
+    const b = this.$(`.uc-people button[data-person="${id}"]`)
+    if (!b) return
+    let dot = b.querySelector('.badge')
+    if (!count) {
+      dot?.remove()
+      return
+    }
+    if (!dot) {
+      dot = document.createElement('span')
+      dot.className = 'badge'
+      b.appendChild(dot)
+    }
+    dot.textContent = count > 9 ? '9+' : String(count)
   }
 
   get chatOpen() {

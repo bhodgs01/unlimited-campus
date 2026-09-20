@@ -1,14 +1,20 @@
 /**
- * Same-origin password gate (the Bot Farm pattern).
+ * Same-origin password gate (the Bot Farm pattern), now with who you are.
  *
- * One shared login (CAMPUS_USERNAME, optional, and CAMPUS_PASSWORD), checked here, sets an
- * HMAC-signed cookie on this origin. Changing either signs everyone out. Only the public hosts in CAMPUS_AUTH_HOSTS are gated; localhost never is. If no
- * password is configured the gate is OFF, so a missing secret never locks anyone out.
+ * CAMPUS_USERS is a comma list of the people who can sign in (blake,alan); they share one
+ * CAMPUS_PASSWORD. The signed cookie carries the username, because the in-app chat needs to
+ * know which of them is walking around. Changing the password signs everyone out. Only the
+ * public hosts in CAMPUS_AUTH_HOSTS are gated; localhost never is. If no password is
+ * configured the gate is OFF, so a missing secret never locks anyone out.
  */
 import crypto from 'node:crypto'
 
 const PASSWORD = process.env.CAMPUS_PASSWORD || ''
-const USERNAME = process.env.CAMPUS_USERNAME || ''
+// CAMPUS_USERNAME is the old single-user name; keep reading it so an old secret still works.
+const USERS = (process.env.CAMPUS_USERS || process.env.CAMPUS_USERNAME || '')
+  .split(',')
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean)
 const AUTH_HOSTS = (process.env.CAMPUS_AUTH_HOSTS || 'unlimitedcampus.kcproto.com')
   .split(',')
   .map((s) => s.trim().toLowerCase())
@@ -17,7 +23,18 @@ const COOKIE = 'uc_auth'
 const DAYS = 30
 const MAXAGE = DAYS * 86400
 
+// Who may sign in (CAMPUS_USERS) is not the same as who is a person on the campus with a
+// chat thread (CAMPUS_CHAT_USERS). "unlimited" is a shared guest login: it walks the campus
+// but it is nobody in particular, so it neither sends nor receives messages.
+const CHAT_USERS = (process.env.CAMPUS_CHAT_USERS || '')
+  .split(',')
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean)
+
 export const authEnabled = () => Boolean(PASSWORD)
+export const knownUsers = () => USERS.slice()
+export const chatUsers = () => (CHAT_USERS.length ? CHAT_USERS.slice() : USERS.slice())
+export const canChat = (user) => chatUsers().includes(String(user || '').toLowerCase())
 
 export function needsAuth(host) {
   if (!PASSWORD) return false
@@ -25,8 +42,11 @@ export function needsAuth(host) {
   return AUTH_HOSTS.includes(h)
 }
 
-function sign(expiry) {
-  return crypto.createHmac('sha256', `${USERNAME}:${PASSWORD}`).update(String(expiry)).digest('base64url')
+function sign(expiry, user) {
+  return crypto
+    .createHmac('sha256', `${USERS.join(',')}:${PASSWORD}`)
+    .update(`${expiry}:${user}`)
+    .digest('base64url')
 }
 
 function eq(a, b) {
@@ -35,25 +55,46 @@ function eq(a, b) {
   return x.length === y.length && crypto.timingSafeEqual(x, y)
 }
 
+function readCookie(req, name) {
+  const raw = String(req.headers.cookie || '')
+  const m = raw.match(new RegExp(`(?:^|;\s*)${name}=([^;]+)`))
+  return m ? decodeURIComponent(m[1]) : ''
+}
+
+/**
+ * The signed-in username, or '' for nobody. With the gate off (localhost) there is no cookie
+ * to read, so a uc_dev_user cookie picks who you are and the first configured user is the
+ * default: that is how you test both sides of the chat without a password.
+ */
+export function currentUser(req) {
+  // Ungated host (localhost): there is no signed cookie to read, so uc_dev_user picks who you
+  // are and the first configured user is the default. That is how you test both sides locally.
+  if (!needsAuth(req.headers?.host)) {
+    const dev = readCookie(req, 'uc_dev_user').toLowerCase()
+    return USERS.includes(dev) ? dev : USERS[0] || 'blake'
+  }
+  const [expiry, user, sig] = (readCookie(req, COOKIE) || '').split('.')
+  if (!expiry || !user || !sig) return ''
+  if (Number(expiry) < Date.now()) return ''
+  return eq(sig, sign(expiry, user)) ? user : ''
+}
+
 export function hasValidAuth(req) {
   if (!PASSWORD) return true
-  const raw = String(req.headers.cookie || '')
-  const m = raw.match(new RegExp(`(?:^|;\\s*)${COOKIE}=([^;]+)`))
-  if (!m) return false
-  const [expiry, sig] = decodeURIComponent(m[1]).split('.')
-  if (!expiry || !sig || Number(expiry) < Date.now()) return false
-  return eq(sig, sign(expiry))
+  return Boolean(currentUser(req))
 }
 
+/** Returns the canonical username on success, '' on failure. Usernames are not case sensitive. */
 export function checkPassword(pw, user = '') {
-  // usernames are not case sensitive; passwords are
-  const userOk = !USERNAME || eq(String(user || '').trim().toLowerCase(), USERNAME.toLowerCase())
-  return Boolean(PASSWORD) && eq(pw, PASSWORD) && userOk
+  if (!PASSWORD || !eq(pw, PASSWORD)) return ''
+  const want = String(user || '').trim().toLowerCase()
+  if (!USERS.length) return 'guest'
+  return USERS.includes(want) ? want : ''
 }
 
-export function makeSetCookie() {
+export function makeSetCookie(user) {
   const expiry = Date.now() + DAYS * 86400000
-  const val = `${expiry}.${sign(expiry)}`
+  const val = `${expiry}.${user}.${sign(expiry, user)}`
   return `${COOKIE}=${encodeURIComponent(val)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${MAXAGE}`
 }
 
@@ -74,8 +115,8 @@ export function loginPage({ error = false } = {}) {
   <form id="f">
     <h1>Unlimited Campus</h1>
     <p>Sign in to walk the campus.</p>
-    ${USERNAME ? '<input id="user" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Username" autofocus>' : ''}
-    <input id="pw" type="password" autocomplete="current-password" placeholder="Password"${USERNAME ? '' : ' autofocus'}>
+    ${USERS.length ? '<input id="user" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Username" autofocus>' : ''}
+    <input id="pw" type="password" autocomplete="current-password" placeholder="Password"${USERS.length ? '' : ' autofocus'}>
     <div class="err" id="e">${error ? 'Wrong username or password. Try again.' : ''}</div>
     <button type="submit">Enter</button>
   </form>
