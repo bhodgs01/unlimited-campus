@@ -459,6 +459,27 @@ function announceUnread() {
   })
 }
 
+/** Clicking yourself: one conversation opens straight up, several offer the list. */
+function openMyMessages() {
+  const peers = REAL.filter((id) => id !== me.id)
+  if (!peers.length) return
+  if (peers.length === 1) return startPersonChat(peers[0])
+  hud.showCard({
+    kicker: 'Messages',
+    title: 'Your messages',
+    text: 'Pick up a conversation.',
+    accent: BRAND.purple,
+    actions: peers.map((id, i) => {
+      const n = me.unread[id] || 0
+      return {
+        label: n ? `${firstName(id)} (${n})` : firstName(id),
+        fn: () => startPersonChat(id),
+        primary: i === 0,
+      }
+    }),
+  })
+}
+
 async function startPersonChat(id) {
   const info = PEOPLE[id]
   if (!info || id === me.id || !me.canChat) return
@@ -1218,6 +1239,8 @@ rig.onUnfollow = () => {
   hud.setActivePerson(null)
 }
 function findPerson(id) {
+  // your own avatar is your inbox: there is no point walking over to yourself
+  if (id === me.id && me.canChat) return openMyMessages()
   const p = people.get(id)
   if (!p) return
   // on foot, clicking someone walks you over to them and starts the conversation there
