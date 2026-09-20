@@ -166,6 +166,19 @@ export function mountBubble() {
     return el
   }
 
+  // The offline DR copy cannot reach Vikunja, so say that plainly rather than letting a
+  // ticket fail with a raw DNS error the way the chat used to.
+  fetch('/api/ticket-config', { credentials: 'same-origin' })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((cfg) => {
+      if (!cfg || cfg.enabled) return
+      const form = $('#cbTicketForm')
+      form.querySelector('button[type=submit]').disabled = true
+      note.className = 'cb-note bad'
+      note.textContent = 'This is the offline copy of the campus. Tickets cannot be filed from here.'
+    })
+    .catch(() => {})
+
   $('#cbFab').addEventListener('click', () => {
     panel.classList.toggle('open')
     if (panel.classList.contains('open') && !body.children.length) {
