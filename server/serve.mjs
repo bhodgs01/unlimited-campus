@@ -5,6 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { needsAuth, hasValidAuth, checkPassword, makeSetCookie, loginPage, authEnabled, currentUser, knownUsers, chatUsers, canChat } from './auth.mjs'
 import { thread, send, markRead, unreadFor, chatReadonly } from './chat.mjs'
+import { createTicket, ticketsEnabled } from './tickets.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const DIST = path.join(here, '..', 'dist')
@@ -106,6 +107,32 @@ const server = http.createServer(async (req, res) => {
     })
   const json = (code, obj) =>
     res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(obj))
+
+  // ── the Ask + Log-a-ticket bubble ───────────────────────────────────────────────────
+  // A ticket may carry a file, so this route reads a far bigger body than the rest.
+  if (url.pathname === '/api/ticket-config') {
+    json(200, { enabled: ticketsEnabled(), user: currentUser(req) })
+    return
+  }
+
+  if (url.pathname === '/api/ticket' && req.method === 'POST') {
+    const body = await new Promise((resolve) => {
+      let buf = ''
+      req.on('data', (c) => {
+        buf += c
+        if (buf.length > 16 * 1024 * 1024) req.destroy()
+      })
+      req.on('end', () => {
+        try {
+          resolve(JSON.parse(buf || '{}'))
+        } catch {
+          resolve({})
+        }
+      })
+    })
+    const out = await createTicket(body, currentUser(req))
+    return json(out.error ? 400 : 200, out)
+  }
 
   if (url.pathname === '/api/me') {
     const me = currentUser(req)

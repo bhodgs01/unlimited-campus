@@ -15,6 +15,7 @@ import { BADGE_ART, CASTLE_ART } from './data/art.js'
 import { BadgeMoments } from './world/badgeMoment.js'
 import { Fireworks } from './world/fireworks.js'
 import { Hud } from './ui/hud.js'
+import { mountBubble } from './ui/bubble.js'
 import { installVr } from './vr.js'
 import { People } from './agents/people.js'
 import { FAMOUS } from './data/famous.js'
@@ -1423,6 +1424,7 @@ async function boot() {
     await people.add('alan', { x: 5, z: -8 })
     await people.add('blake', { x: -5, z: -8 })
     loadMe()
+    mountBubble()
     for (const f of FAMOUS) {
       // Socrates teaches the class in the amphitheater
       if (f.id === 'socrates' && life.lecture) {
