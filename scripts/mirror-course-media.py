@@ -138,6 +138,43 @@ def fetch(f, dest, tmpdir):
     return local, got
 
 
+# The app does not scan the media directory, it reads media/manifest.json and shows only what
+# that lists. Mirroring without rebuilding it leaves the files on disk and invisible, so this
+# always runs at the end of a mirror rather than being a step somebody has to remember.
+KIND_OF = {
+    'text.txt': 'text', 'video.mp4': 'video', 'videoShort.mp4': 'videoShort',
+    'podcast.m4a': 'podcast', 'podcastShort.m4a': 'podcastShort',
+    'pdf.pdf': 'pdf', 'infographic.png': 'infographic',
+}
+
+
+def rebuild_manifest():
+    """Walk what is actually on the NAS and write media/manifest.json to match."""
+    p = subprocess.run(['ssh', '-o', 'ConnectTimeout=10', NAS,
+                        'cd ' + NAS_ROOT + ' && ls -1 */*/* 2>/dev/null'],
+                       capture_output=True, check=True)
+    tree = {}
+    for line in p.stdout.decode('utf8').split():
+        parts = line.strip().split('/')
+        if len(parts) != 3:
+            continue
+        course, module, fname = parts
+        kind = KIND_OF.get(fname)
+        if not kind:
+            continue
+        tree.setdefault(course, {}).setdefault(module, {})[kind] = course + '/' + module + '/' + fname
+    with tempfile.TemporaryDirectory() as t:
+        local = os.path.join(t, 'manifest.json')
+        with open(local, 'w', encoding='utf8') as fh:
+            fh.write(json.dumps(tree, indent=1))
+        subprocess.run(['scp', '-q', local, NAS + ':' + NAS_ROOT + '/manifest.json'], check=True)
+    for course in sorted(tree):
+        mods = tree[course]
+        print('   manifest: ' + course.ljust(18) + str(len(mods)) + ' modules, '
+              + str(sum(len(m) for m in mods.values())) + ' files')
+    return tree
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('course', choices=sorted(COURSES))
@@ -175,6 +212,10 @@ def main():
                 total += size
                 print(f'     {out:18} {size/1e6:8.1f} MB  <- {f["name"][:50]}')
     print(f'\nDone. {total/1e9:.2f} GB copied.')
+    if not a.dry_run:
+        print('')
+        print('Rebuilding the manifest the app reads:')
+        rebuild_manifest()
 
 
 if __name__ == '__main__':
