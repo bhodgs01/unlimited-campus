@@ -112,6 +112,10 @@ const CSS = `
 .uc-chat input{flex:1;min-width:0;background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:999px;padding:9px 13px;color:var(--text);font:inherit;font-size:13.5px}
 .uc-chat input:focus{outline:none;border-color:rgba(229,1,255,.6)}
 .uc-chat .sound{font-size:11px;color:var(--muted);padding:0 12px 9px;display:flex;align-items:center;gap:6px}
+.uc-chat .notify{display:flex;align-items:center;gap:8px;padding:8px 12px;margin:0 10px 8px;border-radius:10px;background:rgba(229,1,255,.10);border:1px solid rgba(229,1,255,.28);font-size:12.5px}
+.uc-chat .notify span{flex:1;color:var(--text)}
+.uc-chat .notify .btn{padding:5px 12px;font-size:12px}
+.uc-chat .notify[hidden],.uc-chat .notify .btn[hidden]{display:none}
 .uc-people button{position:relative}
 .uc-people button .badge{position:absolute;top:-5px;right:-5px;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:#E501FF;color:#fff;font-size:10.5px;font-weight:700;line-height:17px;text-align:center;box-shadow:0 0 0 2px rgba(12,15,23,.9),0 0 10px rgba(229,1,255,.7)}
 .uc-prompt{position:absolute;left:50%;bottom:112px;transform:translateX(-50%);display:none;align-items:center;gap:9px;padding:9px 14px;border-radius:999px;pointer-events:auto;cursor:pointer;font-size:13.5px}
@@ -163,6 +167,7 @@ export class Hud {
         <div class="head"><img alt=""><div><b></b><small></small></div><button class="btn x" data-act="closechat">✕</button></div>
         <div class="log"></div>
         <div class="sound"></div>
+        <div class="notify" hidden><span></span><button class="btn" type="button">Turn on</button></div>
         <form><input type="text" placeholder="Ask them something…" autocomplete="off" maxlength="300"><button class="btn primary" type="submit">Ask</button></form>
       </div>
       <div class="panel uc-course">
@@ -488,6 +493,7 @@ export class Hud {
     this.$('.uc-chat button[type="submit"]').textContent = message ? 'Send' : 'Ask'
     this.chatLog.innerHTML = ''
     this.$('.uc-chat .sound').textContent = ''
+    this.showNotifyOffer(null)
     setTimeout(() => this.$('.uc-chat input')?.focus({ preventScroll: true }), 50)
   }
 
@@ -511,6 +517,20 @@ export class Hud {
       b.appendChild(dot)
     }
     dot.textContent = count > 9 ? '9+' : String(count)
+  }
+
+  /** The "get notified" offer on a person thread. Pass null to hide it. */
+  showNotifyOffer(text, onClick) {
+    const row = this.$('.uc-chat .notify')
+    if (!text) {
+      row.hidden = true
+      return
+    }
+    row.querySelector('span').textContent = text
+    const btn = row.querySelector('button')
+    btn.onclick = onClick
+    btn.hidden = !onClick
+    row.hidden = false
   }
 
   get chatOpen() {

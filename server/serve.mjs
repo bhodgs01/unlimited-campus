@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { needsAuth, hasValidAuth, checkPassword, makeSetCookie, loginPage, authEnabled, currentUser, knownUsers, chatUsers, canChat } from './auth.mjs'
 import { thread, send, markRead, unreadFor, chatReadonly } from './chat.mjs'
 import { createTicket, ticketsEnabled } from './tickets.mjs'
+import { pushEnabled, vapidPublicKey, subscribe, unsubscribe, notify, deviceCount } from './push.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const DIST = path.join(here, '..', 'dist')
@@ -170,6 +171,13 @@ const server = http.createServer(async (req, res) => {
       if (out.error === 'readonly') return json(503, { error: 'This is the offline copy of the campus. Your message would not reach them.' })
       if (out.error === 'unwritable') return json(503, { error: 'The campus could not store that message. Try again in a moment.' })
       if (out.error) return json(400, { error: out.error })
+      const NAMES = { blake: 'Blake Hodgson', alan: 'Alan Smithson' }
+      notify(to, {
+        title: NAMES[me] || me,
+        body: out.message.text,
+        url: `/?chat=${encodeURIComponent(me)}`,
+        tag: `chat-${me}`,
+      }).catch(() => {})
       return json(200, out)
     }
 
@@ -182,6 +190,25 @@ const server = http.createServer(async (req, res) => {
     }
 
     return json(404, { error: 'no such chat route' })
+  }
+
+  // ── phone and desktop notifications for the chat ────────────────────────────────────
+  if (url.pathname.startsWith('/api/push/')) {
+    const me = currentUser(req)
+    if (!me || !canChat(me)) return json(403, { error: 'This login has no messages to be notified about.' })
+
+    if (url.pathname === '/api/push/key' && req.method === 'GET') {
+      return json(200, { enabled: pushEnabled(), publicKey: pushEnabled() ? vapidPublicKey() : '', devices: deviceCount(me) })
+    }
+    if (url.pathname === '/api/push/subscribe' && req.method === 'POST') {
+      const out = subscribe(me, await readJson(req))
+      return json(out.error ? (out.error === 'disabled' ? 503 : 400) : 200, out)
+    }
+    if (url.pathname === '/api/push/unsubscribe' && req.method === 'POST') {
+      const body = await readJson(req)
+      return json(200, unsubscribe(me, String(body.endpoint || '')))
+    }
+    return json(404, { error: 'no such push route' })
   }
 
   // ── the course media, streamed from the NAS ─────────────────────────────────────────

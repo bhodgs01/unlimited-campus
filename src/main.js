@@ -433,7 +433,14 @@ async function loadMe() {
     me.unread = data.unread || {}
     me.readonly = Boolean(data.readonly)
     paintUnread()
-    announceUnread()
+    // arriving from a notification tap goes straight to that thread; otherwise say what is waiting.
+    // This must not wait on push setup: if the service worker never comes up, the unread card
+    // would silently never appear.
+    if (new URLSearchParams(location.search).get('chat')) openChatFromUrl()
+    else announceUnread()
+    // push state only decides whether to OFFER notifications, so it is learnt alongside, and the
+    // offer on an already-open thread is refreshed once we know
+    loadPushState().then(() => dm.with && !me.readonly && offerNotifications(dm.with))
   } catch (err) {
     console.warn('who am I', err)
   }
@@ -489,6 +496,7 @@ async function startPersonChat(id) {
   dm.since = 0
   hud.openChat({ name: info.name, known: info.role || '', face: chipFace(id), message: true })
   hud.chatNote(me.readonly ? 'Offline copy of the campus: you can read, but messages will not send.' : '')
+  if (!me.readonly) offerNotifications(id)
   const had = await pullThread(true)
   if (!had) hud.say('them', `Nothing here yet. Whatever you say, ${firstName(id)} will see next time they open the campus.`)
   markRead(id)
@@ -579,6 +587,109 @@ setInterval(() => {
     })
     .catch(() => {})
 }, 30000)
+
+
+// ── notifications: a phone that buzzes when the other one writes ─────────────────────────
+// Web Push, so it arrives even with the campus closed. Browsers only let a page ask for
+// permission from a click, so this is offered on the thread itself rather than on load.
+const push = { key: '', enabled: false, subscribed: false }
+
+// navigator.serviceWorker.ready waits FOREVER if no worker ever registers: plain http, a Firefox
+// private window, a browser whose policy blocks workers. Anything awaiting it must be bounded, or
+// the thing after it silently never happens.
+function swReady(ms = 4000) {
+  return Promise.race([navigator.serviceWorker.ready, new Promise((resolve) => setTimeout(() => resolve(null), ms))])
+}
+
+const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
+// iPhones only allow web notifications for a campus added to the Home Screen, never a Safari tab
+const iosTab = () =>
+  /iphone|ipad|ipod/i.test(navigator.userAgent) &&
+  !navigator.standalone &&
+  !window.matchMedia('(display-mode: standalone)').matches
+
+function b64ToBytes(b64) {
+  const pad = '='.repeat((4 - (b64.length % 4)) % 4)
+  const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'))
+  return Uint8Array.from(raw, (c) => c.charCodeAt(0))
+}
+
+async function loadPushState() {
+  if (!me.canChat || !pushSupported()) return
+  try {
+    const cfg = await fetch('/api/push/key', { credentials: 'same-origin' }).then((r) => (r.ok ? r.json() : null))
+    if (!cfg?.enabled) return
+    const reg = await swReady()
+    if (!reg) return // no worker in this browser, so no notifications; everything else still works
+    push.key = cfg.publicKey
+    push.enabled = true
+    push.subscribed = Boolean(await reg.pushManager.getSubscription()) && Notification.permission === 'granted'
+  } catch (err) {
+    console.warn('push state', err)
+  }
+}
+
+/** What to say on a person thread about notifications, if anything. */
+function offerNotifications(peer) {
+  const name = firstName(peer)
+  if (iosTab()) {
+    hud.showNotifyOffer(`To get a notification when ${name} writes, add the campus to your Home Screen first.`, null)
+    return
+  }
+  if (!push.enabled || !pushSupported() || push.subscribed) return hud.showNotifyOffer(null)
+  if (Notification.permission === 'denied') {
+    hud.showNotifyOffer('Notifications are blocked for this site in your browser settings.', null)
+    return
+  }
+  hud.showNotifyOffer(`Get a notification when ${name} writes back.`, () => enableNotifications(peer))
+}
+
+async function enableNotifications(peer) {
+  try {
+    const permission = await Notification.requestPermission()
+    if (permission !== 'granted') {
+      offerNotifications(peer)
+      return
+    }
+    const reg = await swReady()
+    if (!reg) throw new Error('no service worker')
+    const sub =
+      (await reg.pushManager.getSubscription()) ||
+      (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(push.key) }))
+    const res = await fetch('/api/push/subscribe', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(sub.toJSON()),
+    })
+    if (!res.ok) throw new Error('subscribe ' + res.status)
+    push.subscribed = true
+    hud.showNotifyOffer(null)
+    hud.chatNote(`Notifications on. You will hear from ${firstName(peer)} even with the campus closed.`)
+  } catch (err) {
+    console.warn('enable notifications', err)
+    hud.chatNote('Could not turn notifications on in this browser.')
+  }
+}
+
+// Tapping a notification while the campus is already open: the service worker hands us the
+// thread to open rather than starting a second copy of the 3D scene.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (ev) => {
+    if (ev.data?.type === 'open-chat' && ev.data.with) startPersonChat(String(ev.data.with))
+  })
+}
+
+/** Arriving from a notification tap with the campus closed: ?chat=<who> opens that thread. */
+function openChatFromUrl() {
+  const params = new URLSearchParams(location.search)
+  const withWhom = params.get('chat')
+  if (!withWhom) return
+  params.delete('chat')
+  const rest = params.toString()
+  history.replaceState(null, '', location.pathname + (rest ? `?${rest}` : '') + location.hash)
+  if (me.canChat && REAL.includes(withWhom) && withWhom !== me.id) startPersonChat(withWhom)
+}
 
 // ── inside the castles: the courses ──────────────────────────────────────────────────────
 // A castle holds a course. Step inside and you are in its Course Hall: a gate per module, the
@@ -1461,7 +1572,9 @@ async function boot() {
 boot()
 
 // installable as an app (the worker caches nothing; see public/sw.js)
-if ('serviceWorker' in navigator && location.protocol === 'https:') {
+// isSecureContext rather than protocol === 'https:': same answer in production, and it also
+// covers localhost, where browsers allow workers and where the push flow has to be testable.
+if ('serviceWorker' in navigator && window.isSecureContext) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch((err) => console.warn('service worker', err)))
 }
 
