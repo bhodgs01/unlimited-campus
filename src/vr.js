@@ -170,6 +170,11 @@ export function installVr({ engine, rig, hud, astronauts, campus, cardFor, onPic
 
   function onSqueeze(e) {
     const c = e.target
+    if (state.ride) {
+      state.ride.alight?.()
+      pulse(c, 0.3, 30)
+      return
+    }
     laserRay(c)
     const hit = ray.intersectPlane(ground, tmpV2)
     if (!hit) return
@@ -219,9 +224,38 @@ export function installVr({ engine, rig, hud, astronauts, campus, cardFor, onPic
     } catch {}
   }
 
+  // ── riding the bus (ported from the School of Brain's train) ──────────────────────────
+  // The player stands on the deck and turns with the bus. Stick-walking is off while aboard:
+  // walking off a moving vehicle in a headset is the fast way to feel ill.
+  let rideYaw = null
+  function followRide() {
+    if (!state.ride) return
+    const seat = state.ride.seat()
+    player.position.copy(seat.pos)
+    if (rideYaw != null) player.rotation.y += seat.yaw - rideYaw
+    rideYaw = seat.yaw
+  }
+  state.board = (ride) => {
+    state.ride = ride
+    rideYaw = null
+    // start facing forward: a camera looks down its own -z, so the bus heading is yaw + PI
+    player.rotation.y = ride.seat().yaw + Math.PI
+    followRide()
+    hud.toast?.('All aboard. Grip to get off.')
+  }
+  state.leave = (to) => {
+    state.ride = null
+    rideYaw = null
+    if (to) player.position.set(to.x, 0, to.z)
+  }
+  // main calls this after the bus has moved each frame, so the seat does not trail it
+  state.followRide = followRide
+
   function update(dt) {
     if (!state.active) return
+    followRide()
     for (const c of controllers) {
+      if (state.ride) break
       const gp = c.userData.gamepad
       if (!gp || !gp.axes) continue
       const ax = gp.axes.length >= 4 ? gp.axes[2] : gp.axes[0]
@@ -245,7 +279,7 @@ export function installVr({ engine, rig, hud, astronauts, campus, cardFor, onPic
         pulse(c, 0.2, 20)
       }
     }
-    player.position.y = 0
+    if (!state.ride) player.position.y = 0
 
     const p = pointer()
     const h = p ? under(p) : null

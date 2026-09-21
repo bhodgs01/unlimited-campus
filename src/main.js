@@ -173,6 +173,8 @@ const DEFAULT_HOME = { azimuth: Math.PI / 4, polar: THREE.MathUtils.degToRad(56)
 const walk = new WalkMode({ engine, rig, campus, nav, hud: null })
 
 const hud = new Hud(app, settings, {
+  bus: () => (riding ? alight() : board()),
+  getoff: () => alight(),
   home: () => {
     rig.resetView()
     selectedCastle = null
@@ -1160,7 +1162,7 @@ engine.canvas.addEventListener('pointerup', (e) => {
   const moved = Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y)
   const held = performance.now() - downAt.t
   downAt = null
-  if (moved > 6 || held > 500 || vr.active) return
+  if (moved > 6 || held > 500 || vr.active || riding) return
   const rect = engine.canvas.getBoundingClientRect()
   ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
   ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
@@ -1427,6 +1429,94 @@ function famousHome(f) {
 // ── VR ──────────────────────────────────────────────────────────────────────────────────
 const vr = installVr({ engine, rig, hud, astronauts, campus, cardFor, lite: LITE, onPick: (hit) => { if (hit.tag === 'badge') playBadge(hit.id); if (hit.tag === 'portal') beamToBrain() } })
 
+// ── riding the bus ────────────────────────────────────────────────────────────────────────
+// The campus bus is an open-top sightseeing loop past every school, castle and hall (see Bus in
+// life/traffic.js). Hop on and you sit on the front bench of the top deck; the bar at the top
+// says where it stops next and what you are passing. Same shape as the School's train ride.
+const SEAT_EYE = 1.2 // seated eye height above the deck
+let riding = false
+const look = { yaw: 0, pitch: -0.1, drag: null }
+
+function board() {
+  const bus = life.bus
+  if (!bus || riding) return
+  if (walk.active) walk.exit()
+  hud.closeCard()
+  hud.toggleHelp?.(false)
+  if (hud.chatOpen) hud.closeChat()
+  following = null
+  rig.unfollow?.()
+  hud.setActivePerson(null)
+  riding = true
+  look.yaw = 0
+  // near level: lower and the bench in front fills the bottom of a narrow 38 degree lens
+  look.pitch = -0.04
+  document.querySelector('.uc-labels')?.style.setProperty('display', 'none')
+  if (vr.active) {
+    vr.board?.({ seat: () => bus.seat(), alight })
+  } else {
+    rig.enabled = false
+    hud.toast('All aboard. Drag to look around; Esc or Get off to leave.')
+  }
+  rideBar(true)
+}
+
+function alight() {
+  if (!riding) return
+  riding = false
+  look.drag = null
+  hud.setRide(null)
+  document.querySelector('.uc-labels')?.style.removeProperty('display')
+  const p = life.bus.root.position
+  const yaw = life.bus.root.rotation.y
+  // step off on the curb side, not into the road
+  const off = { x: p.x - Math.cos(yaw) * 3, z: p.z + Math.sin(yaw) * 3 }
+  if (vr.active) {
+    vr.leave?.(off)
+    return
+  }
+  engine.camera.rotation.order = 'XYZ'
+  rig.enabled = true
+  rig.focus(new THREE.Vector3(off.x, 0, off.z), { distance: 60 })
+}
+
+let rideBarAt = 0
+function rideBar(force) {
+  const now = performance.now()
+  if (!force && now - rideBarAt < 250) return
+  rideBarAt = now
+  const bus = life.bus
+  const sight = bus.sightNow()
+  const here = bus.atStop
+  // do not announce the stop you are standing at as something you are "passing"
+  const sightText = sight && sight.name !== here?.name ? `On your ${sight.side}: ${sight.name}` : ''
+  if (here) hud.setRide({ label: 'Now at', text: `${here.name} · leaving in ${Math.max(0, Math.ceil(bus.dwell))}s`, sight: sightText })
+  else if (bus.nextStop) hud.setRide({ label: 'Next stop', text: `${bus.nextStop.name} · ${Math.max(1, Math.round(bus.eta))}s`, sight: sightText })
+}
+
+/** Put the eye on the front bench, facing forward plus wherever you have dragged to look. */
+function rideCamera() {
+  const seat = life.bus.seat()
+  const cam = engine.camera
+  cam.position.set(seat.pos.x, seat.pos.y + SEAT_EYE, seat.pos.z)
+  cam.rotation.order = 'YXZ'
+  // a camera looks down its own -z, so facing the bus's heading (sin yaw, cos yaw) is yaw + PI
+  cam.rotation.set(look.pitch, seat.yaw + Math.PI + look.yaw, 0)
+  // keep the rig under the bus, so the sky and the fog follow along and getting off lands here
+  rig.target.set(seat.pos.x, 0, seat.pos.z)
+}
+
+engine.canvas.addEventListener('pointerdown', (e) => {
+  if (riding && !vr.active) look.drag = { x: e.clientX, y: e.clientY }
+})
+window.addEventListener('pointermove', (e) => {
+  if (!look.drag) return
+  look.yaw -= (e.clientX - look.drag.x) * 0.005
+  look.pitch = THREE.MathUtils.clamp(look.pitch - (e.clientY - look.drag.y) * 0.004, -1.1, 0.9)
+  look.drag = { x: e.clientX, y: e.clientY }
+})
+window.addEventListener('pointerup', () => (look.drag = null))
+
 // ── the intro: from high above, down onto the plaza ────────────────────────────────────
 let savedHome = null
 try {
@@ -1485,7 +1575,9 @@ engine.add({
       if (timeTween.t >= 1) timeTween = null
     }
     if (vr.active) vr.update(dt)
-    else if (walk.active) walk.update(dt)
+    else if (riding) {
+      // the bus drives the camera, after life has moved the bus (below)
+    } else if (walk.active) walk.update(dt)
     else rig.update(dt)
     // outside, the prompt offers whoever you are standing next to; inside a castle it is the
     // hall's own instruction, so leave it alone
@@ -1510,6 +1602,11 @@ engine.add({
       insideSteps()
     }
     life.update(dt, elapsed, nightK)
+    if (riding) {
+      if (vr.active) vr.followRide?.()
+      else rideCamera()
+      rideBar()
+    }
     badgeMoments.update(dt, engine.camera)
     fireworks.update(dt, nightK)
     mark.userData.tick(dt)
@@ -1528,6 +1625,7 @@ let nearId = null
 addEventListener('keydown', (e) => {
   if (e.code === 'KeyE' && walk.active && nearId && !hud.chatOpen) startChat(nearId)
   if (e.code === 'Escape' && hud.chatOpen) hud.closeChat()
+  else if (e.code === 'Escape' && riding) alight()
 })
 
 // ── go ──────────────────────────────────────────────────────────────────────────────────
@@ -1538,6 +1636,7 @@ async function boot() {
     await people.add('blake', { x: -5, z: -8 })
     loadMe()
     mountBubble()
+    if (params.get('ride') === 'bus') setTimeout(board, 400)
     for (const f of FAMOUS) {
       // Socrates teaches the class in the amphitheater
       if (f.id === 'socrates' && life.lecture) {
@@ -1563,7 +1662,9 @@ async function boot() {
   engine.start()
   hud.removeBoot()
   if (!localStorage.getItem('unlimitedcampus.seen')) {
-    setTimeout(() => hud.toggleHelp(true), 6500)
+    // never over a ride: a ?ride=bus link boards at once, and six seconds later this used to
+    // drop the help panel straight across the view from the deck
+    setTimeout(() => !riding && hud.toggleHelp(true), 6500)
     try {
       localStorage.setItem('unlimitedcampus.seen', '1')
     } catch {}

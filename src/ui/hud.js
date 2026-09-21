@@ -14,6 +14,7 @@ const ICON = {
   help: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .8-1 1.5v.7M12 17h.01"/></svg>',
   vr: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="10" rx="3"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/></svg>',
   crew: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>',
+  bus: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="14" rx="2"/><path d="M4 11h16"/><path d="M8 21v-4"/><path d="M16 21v-4"/><circle cx="8" cy="14" r="0.6" fill="currentColor"/><circle cx="16" cy="14" r="0.6" fill="currentColor"/></svg>',
   walk: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13" cy="4" r="2"/><path d="M11 21l1.5-5.5L9 13l1-5 4 2 2 3"/><path d="M10 8l-3 2-1 4"/><path d="M12.5 15.5L16 21"/></svg>',
   fly: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l18-8-8 18-2-7z"/></svg>',
 }
@@ -116,6 +117,14 @@ const CSS = `
 .uc-chat .notify span{flex:1;color:var(--text)}
 .uc-chat .notify .btn{padding:5px 12px;font-size:12px}
 .uc-chat .notify[hidden],.uc-chat .notify .btn[hidden]{display:none}
+.uc-ride{position:absolute;left:50%;top:14px;transform:translateX(-50%);display:none;align-items:center;gap:12px;padding:8px 8px 8px 14px;pointer-events:auto;max-width:calc(100vw - 28px)}
+.uc-ride.open{display:flex}
+.uc-ride .where{font-size:13.5px;min-width:0}
+.uc-ride .where small{display:block;color:var(--muted);font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+.uc-ride .where span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.uc-ride .where em{display:block;font-style:normal;font-size:12px;color:#ef6bff;min-height:15px}
+.uc-ride .btn{white-space:nowrap}
+.rail .btn.active{background:rgba(229,1,255,.22);border-color:rgba(229,1,255,.6)}
 .uc-people button{position:relative}
 .uc-people button .badge{position:absolute;top:-5px;right:-5px;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:#E501FF;color:#fff;font-size:10.5px;font-weight:700;line-height:17px;text-align:center;box-shadow:0 0 0 2px rgba(12,15,23,.9),0 0 10px rgba(229,1,255,.7)}
 .uc-prompt{position:absolute;left:50%;bottom:112px;transform:translateX(-50%);display:none;align-items:center;gap:9px;padding:9px 14px;border-radius:999px;pointer-events:auto;cursor:pointer;font-size:13.5px}
@@ -146,9 +155,11 @@ export class Hud {
         <button class="btn" data-act="night" title="Day / night">${ICON.moon}</button>
         <button class="btn" data-act="crew" title="Show / hide students">${ICON.crew}</button>
         <button class="btn" data-act="walk" title="Drop in and walk (Esc to fly again)">${ICON.walk}</button>
+        <button class="btn" data-act="bus" title="Ride the bus round every school and castle (Esc to get off)">${ICON.bus}</button>
         <button class="btn" data-act="vr" title="Enter VR" hidden>${ICON.vr}</button>
         <button class="btn" data-act="help" title="Help">${ICON.help}</button>
       </div>
+      <div class="panel uc-ride"><div class="where"><small></small><span></span><em></em></div><button class="btn" data-act="getoff">Get off</button></div>
       <div class="panel uc-chips"></div>
       <div class="panel uc-card"><button class="btn x" data-act="close">✕</button><img class="art" alt="" hidden><div class="kicker"></div><h2></h2><p></p><div class="badges"></div><div class="row"></div></div>
       <div class="panel uc-help">
@@ -531,6 +542,17 @@ export class Hud {
     btn.onclick = onClick
     btn.hidden = !onClick
     row.hidden = false
+  }
+
+  /** The ride bar: { label, text, sight } while riding, null to put it away. */
+  setRide(info) {
+    const bar = this.$('.uc-ride')
+    bar.classList.toggle('open', Boolean(info))
+    this.$('[data-act="bus"]')?.classList.toggle('active', Boolean(info))
+    if (!info) return
+    bar.querySelector('small').textContent = info.label
+    bar.querySelector('span').textContent = info.text
+    bar.querySelector('em').textContent = info.sight || ''
   }
 
   get chatOpen() {

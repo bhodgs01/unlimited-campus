@@ -115,7 +115,8 @@ export class Life {
     const blocked = (x, z) => (nav ? nav.isBlocked(x, z) : false)
     add(new Dogs(g, this.soccer, lite ? [] : [{ x: 42, z: 66, r: 7 }, { x: -46, z: 90, r: 6 }, { x: 0, z: -48, r: 8 }], { blocked }))
     add(new Ducks(g, (campus.ponds || []).map((p) => ({ ...p, rf: p.name === 'lake' ? 0.44 : 0.55 }))))
-    add(new Bus(g, { shadows }))
+    // kept by name: the rider needs it to board, and main reads its stops for the ride bar
+    this.bus = add(new Bus(g, { shadows, landmarks: campus.landmarks || [] }))
     add(new Bikes(g, { count: lite ? 2 : 5, shadows }))
     add(new Steam(g, placed('foodtruck').map((t) => ({ x: t.x, z: t.z, ry: t.ry }))))
 
