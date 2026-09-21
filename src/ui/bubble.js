@@ -75,6 +75,14 @@ const CSS = `
   .cb-panel{left:14px;right:14px;width:auto;bottom:98px;max-height:64vh}
   .cb-fab{right:14px;bottom:70px;width:46px;height:46px;font-size:19px}
 }
+/* Out of the way while you are already talking to someone: the bubble is redundant then, and on a
+   phone it sat right on top of the chat's Send button. */
+body:has(.uc-chat.open) .cb-fab,body:has(.uc-chat.open) .cb-panel{display:none}
+/* On a phone the cards and the module quest also open at the bottom, with their buttons
+   bottom-right (Message Alan, Read them, Done): exactly where the bubble sits. */
+@media (max-width:640px){
+  body:has(.uc-card.open) .cb-fab,body:has(.uc-quest.open) .cb-fab{display:none}
+}
 `
 
 const HTML = `

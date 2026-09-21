@@ -1437,6 +1437,22 @@ const SEAT_EYE = 1.2 // seated eye height above the deck
 let riding = false
 const look = { yaw: 0, pitch: -0.1, drag: null }
 
+/**
+ * Mirror the ride in the address bar: while you are aboard it reads ?ride=bus, so whatever you
+ * copy is a link that puts the next person straight on the bus. replaceState rather than push, so
+ * Back does not have to step through getting on and off. Other parameters (?lite=1) are kept.
+ */
+function setRideParam(on) {
+  try {
+    const u = new URL(location.href)
+    if (on) u.searchParams.set('ride', 'bus')
+    else u.searchParams.delete('ride')
+    history.replaceState(history.state, '', u.pathname + u.search + u.hash)
+  } catch {
+    /* an odd URL is no reason to refuse the ride */
+  }
+}
+
 function board() {
   const bus = life.bus
   if (!bus || riding) return
@@ -1448,6 +1464,7 @@ function board() {
   rig.unfollow?.()
   hud.setActivePerson(null)
   riding = true
+  setRideParam(true)
   look.yaw = 0
   // near level: lower and the bench in front fills the bottom of a narrow 38 degree lens
   look.pitch = -0.04
@@ -1464,6 +1481,7 @@ function board() {
 function alight() {
   if (!riding) return
   riding = false
+  setRideParam(false)
   look.drag = null
   hud.setRide(null)
   document.querySelector('.uc-labels')?.style.removeProperty('display')
