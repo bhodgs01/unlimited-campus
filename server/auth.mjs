@@ -98,6 +98,10 @@ export function makeSetCookie(user) {
   return `${COOKIE}=${encodeURIComponent(val)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${MAXAGE}`
 }
 
+// After signing in, reload the SAME address rather than '/': the gate serves this page at whatever
+// was asked for, and '/' threw away deep links. A shared ?ride=bus link, or a notification tapped
+// while signed out (?chat=alan), landed on the plain campus instead of where it pointed. Same
+// origin, so there is no open redirect in this.
 export function loginPage({ error = false } = {}) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Unlimited Campus</title><link rel="icon" href="/favicon.ico" sizes="48x48"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#202020"><style>
   :root{color-scheme:dark}
@@ -124,7 +128,7 @@ export function loginPage({ error = false } = {}) {
     const f=document.getElementById('f'),pw=document.getElementById('pw'),user=document.getElementById('user'),e=document.getElementById('e');
     f.addEventListener('submit',async(ev)=>{ev.preventDefault();e.textContent='';
       try{const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:user?user.value:'',password:pw.value})});
-        if(r.ok){location.replace('/');}else{e.textContent=user?'Wrong username or password. Try again.':'Wrong password. Try again.';pw.value='';pw.focus();}
+        if(r.ok){location.replace(location.pathname+location.search+location.hash);}else{e.textContent=user?'Wrong username or password. Try again.':'Wrong password. Try again.';pw.value='';pw.focus();}
       }catch(_){e.textContent='Could not reach the server. Try again.';}
     });
   </script>
