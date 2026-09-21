@@ -1277,6 +1277,8 @@ function findPerson(id) {
     kicker: info.role,
     title: info.name,
     text: info.intro,
+    image: chipFace(id),
+    square: true,
     accent: id === 'alan' ? BRAND.purple : '#159daf',
     actions:
       me.canChat && REAL.includes(id) && id !== me.id

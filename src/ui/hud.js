@@ -42,6 +42,8 @@ const CSS = `
 .uc-card .row{display:flex;gap:6px;justify-content:flex-end}
 .uc-card img.art{display:block;width:100%;border-radius:12px;object-fit:cover;aspect-ratio:16/9;margin:4px 0 2px;border:1px solid var(--line)}
 .uc-card img.art.square{width:132px;height:132px;aspect-ratio:1;object-fit:contain;border:0;margin:0 auto;filter:drop-shadow(0 6px 18px rgba(229,1,255,.35))}
+/* display:block beats the hidden attribute, so an image-less card drew an empty frame */
+.uc-card img.art[hidden]{display:none}
 .uc-card .x{position:absolute;right:10px;top:8px;width:28px;height:28px;min-width:28px;padding:0;border-radius:8px}
 .uc-help{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(420px,calc(100vw - 28px));padding:18px 20px;display:none;flex-direction:column;gap:8px;pointer-events:auto}
 .uc-help.open{display:flex}
