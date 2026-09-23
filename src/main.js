@@ -172,6 +172,21 @@ const HOME_KEY = 'unlimitedcampus.home.v1'
 const DEFAULT_HOME = { azimuth: Math.PI / 4, polar: THREE.MathUtils.degToRad(56), distance: 150, x: 0, z: 6 }
 
 const walk = new WalkMode({ engine, rig, campus, nav, hud: null })
+// Depth precision (ticket 373, textures fighting on buildings): a fixed 0.5 m near plane against
+// a 1200 m far plane leaves too few depth steps for surfaces a few centimetres apart once the
+// camera is up over the campus, and they flicker. High up nothing can be that close to the lens,
+// so the near plane follows the camera's height; on foot it comes right back in.
+engine.add({
+  update() {
+    const cam = engine.camera
+    if (engine.renderer.xr?.isPresenting) return
+    const want = walk.active ? 0.2 : Math.min(8, Math.max(0.5, cam.position.y * 0.04))
+    if (Math.abs(want - cam.near) / cam.near > 0.1) {
+      cam.near = want
+      cam.updateProjectionMatrix()
+    }
+  },
+})
 
 // Whether the teachers speak out loud. Read here rather than beside speak(), because the HUD is
 // built before that and asks for it on the first line it draws.
