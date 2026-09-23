@@ -113,6 +113,9 @@ const CSS = `
 .uc-chat input{flex:1;min-width:0;background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:999px;padding:9px 13px;color:var(--text);font:inherit;font-size:13.5px}
 .uc-chat input:focus{outline:none;border-color:rgba(229,1,255,.6)}
 .uc-chat .sound{font-size:11px;color:var(--muted);padding:0 12px 9px;display:flex;align-items:center;gap:6px}
+.uc-chat .head .mute{margin-left:auto;font-size:14px;line-height:1}
+.uc-chat .head .mute.active{color:#E501FF}
+.btn.tiny{padding:1px 8px;font-size:10.5px;border-radius:999px;line-height:1.7}
 .uc-chat .notify{display:flex;align-items:center;gap:8px;padding:8px 12px;margin:0 10px 8px;border-radius:10px;background:rgba(229,1,255,.10);border:1px solid rgba(229,1,255,.28);font-size:12.5px}
 .uc-chat .notify span{flex:1;color:var(--text)}
 .uc-chat .notify .btn{padding:5px 12px;font-size:12px}
@@ -175,7 +178,7 @@ export class Hud {
         <div class="row"><button class="btn primary" data-act="closehelp">Got it</button></div>
       </div>
       <div class="panel uc-chat">
-        <div class="head"><img alt=""><div><b></b><small></small></div><button class="btn x" data-act="closechat">✕</button></div>
+        <div class="head"><img alt=""><div><b></b><small></small></div><button class="btn x mute" data-act="mute" type="button" title="Mute the voice" aria-pressed="false">🔊</button><button class="btn x" data-act="closechat">✕</button></div>
         <div class="log"></div>
         <div class="sound"></div>
         <div class="notify" hidden><span></span><button class="btn" type="button">Turn on</button></div>
@@ -574,8 +577,30 @@ export class Hud {
     return el
   }
 
-  chatNote(text) {
-    this.$('.uc-chat .sound').textContent = text || ''
+  /**
+   * The line under the chat log. With `stoppable`, it carries a Stop button, because a teacher
+   * who is mid-sentence is the one time you most want the voice to end and cannot wait for it.
+   */
+  chatNote(text, stoppable = false) {
+    const el = this.$('.uc-chat .sound')
+    el.textContent = text || ''
+    if (!text || !stoppable) return
+    const b = document.createElement('button')
+    b.className = 'btn tiny'
+    b.type = 'button'
+    b.dataset.act = 'stopVoice'
+    b.textContent = 'Stop'
+    el.appendChild(b)
+  }
+
+  /** The speaker toggle: off means no voice at all until it is turned back on. */
+  setMuted(on) {
+    const b = this.$('.uc-chat .mute')
+    if (!b) return
+    b.textContent = on ? '\u{1F507}' : '\u{1F50A}'
+    b.title = on ? 'The voice is off. Turn it back on' : 'Mute the voice'
+    b.setAttribute('aria-pressed', on ? 'true' : 'false')
+    b.classList.toggle('active', on)
   }
 
   toast(message, kind = '') {

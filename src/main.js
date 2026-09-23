@@ -173,6 +173,12 @@ const DEFAULT_HOME = { azimuth: Math.PI / 4, polar: THREE.MathUtils.degToRad(56)
 
 const walk = new WalkMode({ engine, rig, campus, nav, hud: null })
 
+// Whether the teachers speak out loud. Read here rather than beside speak(), because the HUD is
+// built before that and asks for it on the first line it draws.
+const VOICE_OFF_KEY = 'uc.voiceOff'
+let voiceOff = false
+try { voiceOff = localStorage.getItem(VOICE_OFF_KEY) === '1' } catch (err) { voiceOff = false }
+
 const hud = new Hud(app, settings, {
   bus: () => (riding ? alight() : board()),
   getoff: () => alight(),
@@ -207,6 +213,8 @@ const hud = new Hud(app, settings, {
     if (walk.active) hud.toast('Dropped in. WASD to walk, drag to look, Esc to fly again.')
   },
   talk: () => talkToNearest(),
+  mute: () => setVoiceOff(!voiceOff),
+  stopVoice: () => stopVoice(),
   leaveCastle: () => leaveCastle(),
   askGuide: () => inside.course && greetGuide(inside.course),
   ask: (text) => (dm.with ? sendMessage(text) : askTeacher(text)),
@@ -225,6 +233,8 @@ const hud = new Hud(app, settings, {
   },
 })
 hud.setCrew(true)
+// a voice turned off on a previous visit stays off, and the button has to say so
+hud.setMuted(voiceOff)
 walk.hud = hud
 
 function flyTo(id) {
@@ -399,12 +409,34 @@ async function askTeacher(text) {
   }
 }
 
-/** Fish Audio, through the Brain (it holds the key and caches the clip). */
-function speak(text, voice) {
-  if (!voice) return
+// Blake, 23 Sep: "the 3d campus module doesn't have a way to pause or mute convo." A teacher
+// talking is the right default, and being unable to stop one is not. Stop ends the clip that is
+// playing; mute keeps every later one silent and is remembered, because someone who turns the
+// voice off in an open-plan office wants it to stay off tomorrow.
+
+function stopVoice() {
   try {
     chat.audio?.pause()
-    hud.chatNote('🔊 speaking…')
+    if (chat.audio) chat.audio.currentTime = 0
+  } catch (err) { /* a clip that never started is already stopped */ }
+  chat.audio = null
+  hud.chatNote(voiceOff ? '🔇 voice off' : '')
+}
+
+function setVoiceOff(on) {
+  voiceOff = on
+  try { localStorage.setItem(VOICE_OFF_KEY, on ? '1' : '0') } catch (err) { /* private window */ }
+  hud.setMuted(on)
+  if (on) stopVoice()
+  else hud.chatNote('')
+}
+
+/** Fish Audio, through the Brain (it holds the key and caches the clip). */
+function speak(text, voice) {
+  if (!voice || voiceOff) return
+  try {
+    chat.audio?.pause()
+    hud.chatNote('🔊 speaking…', true)
     const audio = new Audio(`${BRAIN}/api/teacher-voice?voice=${encodeURIComponent(voice)}&text=${encodeURIComponent(text.slice(0, 700))}`)
     chat.audio = audio
     audio.onended = () => hud.chatNote('')
