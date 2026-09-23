@@ -1649,7 +1649,8 @@ export function buildCampus(scene, { shadows = true, lite = false, merge = true 
     }
     for (const pl of placed) {
       const root = pl.built?.root
-      if (!root || !root.parent || pl.name === 'billboard') continue
+      // the Saturn V stays live: stolen, it hands over to the flight rocket and must hide and come back
+      if (!root || !root.parent || pl.name === 'billboard' || pl.name === 'saturnv') continue
       root.updateMatrixWorld(true)
       // parts that move stay live; everything else is baked into the shared merge
       const keep = new Set()

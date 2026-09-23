@@ -24,6 +24,7 @@ import { PEOPLE } from './agents/family.js'
 import { Life } from './life/index.js'
 import { PORTAL_URL } from './life/portal.js'
 import { WalkMode } from './core/walk.js'
+import { Rocket } from './life/rocket.js'
 import { CourseHall, INTERIOR_ORIGIN } from './world/interior.js'
 import { COURSES, GUIDES as COURSE_GUIDES, courseForCastle } from './data/courses.js'
 
@@ -196,7 +197,7 @@ try { voiceOff = localStorage.getItem(VOICE_OFF_KEY) === '1' } catch (err) { voi
 
 const hud = new Hud(app, settings, {
   bus: () => (riding ? alight() : board()),
-  getoff: () => alight(),
+  getoff: () => (flying ? leaveRocket() : alight()),
   home: () => {
     rig.resetView()
     selectedCastle = null
@@ -322,6 +323,18 @@ function cardFor(hit) {
       space: ['Space', 'Saturn V, the ISS, JWST, Hubble, a launchpad, a Mars rover and a moon base.'],
     }[sid]
     if (!SCHOOL) return null
+    if (sid === 'space' && rocket)
+      return {
+        kicker: 'School',
+        title: 'School of Space',
+        text: rocket.phase === 'pad' ? `${SCHOOL[1]} The Saturn V is fuelled, and nobody is watching it.` : rocket.active ? 'Somebody already stole the rocket. It was you.' : 'The last rocket is in the sea. The next one is being rolled out.',
+        accent: BRAND.lime,
+        actions: [
+          ...(rocket.phase === 'pad' ? [{ label: '🚀 Steal the rocket', fn: () => stealRocket(), primary: true }] : []),
+          { label: 'Copy launch link', fn: () => copyLaunchLink() },
+          { label: 'Open in the Brain', fn: () => openSchool(sid) },
+        ],
+      }
     return { kicker: 'School', title: `School of ${SCHOOL[0]}`, text: SCHOOL[1], accent: BRAND.lime, actions: [{ label: 'Fly there', fn: () => { const l = campus.landmarks.find((m) => m.id === `school:${sid}`); if (l) rig.focus(new THREE.Vector3(l.x, 0, l.z), { distance: 48 }) }, primary: true }, { label: sid === 'recipes' ? 'Open Dinner' : 'Open in the Brain', fn: () => openSchool(sid) }] }
   }
   const INFO = {
@@ -1221,7 +1234,7 @@ engine.canvas.addEventListener('pointerup', (e) => {
   const moved = Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y)
   const held = performance.now() - downAt.t
   downAt = null
-  if (moved > 6 || held > 500 || vr.active || riding) return
+  if (moved > 6 || held > 500 || vr.active || riding || flying) return
   const rect = engine.canvas.getBoundingClientRect()
   ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
   ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
@@ -1584,7 +1597,7 @@ function rideCamera() {
 }
 
 engine.canvas.addEventListener('pointerdown', (e) => {
-  if (riding && !vr.active) look.drag = { x: e.clientX, y: e.clientY }
+  if ((riding || flying) && !vr.active) look.drag = { x: e.clientX, y: e.clientY }
 })
 window.addEventListener('pointermove', (e) => {
   if (!look.drag) return
@@ -1594,13 +1607,148 @@ window.addEventListener('pointermove', (e) => {
 })
 window.addEventListener('pointerup', () => (look.drag = null))
 
+// ── the rocket: steal the Space school's Saturn V and go to space ─────────────────────
+// The flight is the School of Brain's (life/rocket.js, shared): countdown, launch, staging,
+// space over a real Earth, re-entry, parachutes, splashdown. Here it stands in for the Saturn V
+// on the north shore and wears the Awesomenauts' purple and lime. /campus/liftoff (or
+// ?liftoff) puts whoever opens it straight into it at T-5.
+const LIFTOFF = /\/liftoff\/?$/.test(location.pathname) || params.has('liftoff')
+let flying = false
+let rocketHome = false
+/** The campus has no synthesised sound of its own; the rocket's rumble and beeps need this much. */
+const rocketSound = {
+  on: false,
+  ctx: null,
+  master: null,
+  enable() {
+    if (this.ctx) {
+      this.ctx.resume()
+      return
+    }
+    const AC = window.AudioContext || window.webkitAudioContext
+    if (!AC) return
+    this.ctx = new AC()
+    this.master = this.ctx.createGain()
+    this.master.gain.value = 0.6
+    this.master.connect(this.ctx.destination)
+    this.on = true
+  },
+  ping({ freq = 440, dur = 1.2, type = 'sine', gain = 0.2, sweep = 0, delay = 0 }) {
+    if (!this.on) return
+    const t = this.ctx.currentTime + delay
+    const osc = this.ctx.createOscillator()
+    osc.type = type
+    osc.frequency.setValueAtTime(freq, t)
+    if (sweep) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + sweep), t + dur)
+    const g = this.ctx.createGain()
+    g.gain.setValueAtTime(0.0001, t)
+    g.gain.exponentialRampToValueAtTime(gain, t + 0.02)
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur)
+    osc.connect(g).connect(this.master)
+    osc.start(t)
+    osc.stop(t + dur + 0.05)
+  },
+}
+const saturn = campus.placed.find((q) => q.name === 'saturnv')?.built?.root || null
+const rocket = saturn
+  ? new Rocket(engine.scene, campus, {
+      sky,
+      sound: rocketSound,
+      hud,
+      name: 'AWESOMENAUT-1',
+      livery: { band: 0xe501ff, fins: 0xafff00 },
+      standIn: saturn,
+      // the island: an ellipse 252 by 166 m with a ragged coast; near enough for where to stand
+      land: (x, z, inset = 0) => (x * x) / Math.max(1, (252 - inset) ** 2) + (z * z) / Math.max(1, (166 - inset) ** 2) < 1,
+      bounds: { cx: 0, cz: 0 },
+      reach: 280,
+      // out in the open Atlantic, well clear of the School of Brain's patch of sea
+      home: { lat: 34.5, lon: -44 },
+      sea: campus.sea?.group,
+      onDone: () => {
+        rocketHome = true
+        leaveRocket()
+      },
+    })
+  : null
+if (rocket) campus.pickables.push(...rocket.pickables)
+// while it flies, the campus's own panels step aside (the rocket hides the School's by name)
+{
+  const st = document.createElement('style')
+  st.textContent = 'body.launching .uc-chips,body.launching .uc-people,body.launching .uc-famous,body.launching .uc-mantra,body.launching .uc-quest,body.launching .uc-prompt{display:none!important}'
+  document.head.appendChild(st)
+}
+
+function stealRocket(opts = {}) {
+  if (!rocket || flying) return
+  if (riding) alight()
+  if (walk.active) walk.exit()
+  hud.closeCard()
+  hud.toggleHelp?.(false)
+  if (hud.chatOpen) hud.closeChat()
+  following = null
+  rig.unfollow?.()
+  hud.setActivePerson(null)
+  rocketSound.enable()
+  if (!rocket.start(opts)) return hud.toast(rocket.phase === 'rollout' ? 'The next rocket is still being rolled out.' : 'The rocket is not on the pad right now.')
+  flying = true
+  rocket.vr = Boolean(vr.active)
+  look.yaw = 0
+  look.pitch = -0.1
+  look.drag = null
+  document.querySelector('.uc-labels')?.style.setProperty('display', 'none')
+  if (vr.active) vr.board?.({ seat: () => rocket.seat(), alight: () => leaveRocket() })
+  else rig.enabled = false
+}
+/** Esc, Get out, grip: on the pad it stands down; up there it is the ride home, which ends in the sea. */
+function leaveRocket() {
+  if (!flying) return
+  if (!rocketHome && !rocket.leave()) return
+  rocketHome = false
+  flying = false
+  const at = rocket.pos ? { x: rocket.pos.x, z: rocket.pos.z } : rocket.pad
+  rocket.end()
+  hud.setRide(null)
+  document.querySelector('.uc-labels')?.style.removeProperty('display')
+  // home on the shore nearest the splash
+  const k = Math.min(1, 150 / Math.max(1, Math.hypot(at.x, at.z)))
+  const ground = { x: at.x * k, z: at.z * k }
+  if (vr.active) {
+    vr.leave?.(ground)
+    return
+  }
+  engine.camera.rotation.order = 'XYZ'
+  rig.enabled = true
+  rig.focus(new THREE.Vector3(ground.x, 0, ground.z), { distance: 90 })
+}
+function copyLaunchLink() {
+  const url = `${location.origin}${import.meta.env.BASE_URL}liftoff`
+  const done = () => hud.toast(`Copied: ${url}`)
+  navigator.clipboard?.writeText(url).then(done, () => hud.toast(url)) ?? hud.toast(url)
+}
+let flyBarAt = 0
+function flyBar() {
+  const now = performance.now()
+  if (now - flyBarAt < 250) return
+  flyBarAt = now
+  const b = rocket.bar()
+  hud.setRide({ label: b.label, text: b.text, sight: '' })
+}
+// a launch link has no click behind it: the first touch anywhere turns the sound on
+addEventListener('pointerdown', () => {
+  if (flying && !rocketSound.on) {
+    rocketSound.enable()
+    rocket._audio(true)
+  }
+})
+
 // ── the intro: from high above, down onto the plaza ────────────────────────────────────
 let savedHome = null
 try {
   savedHome = JSON.parse(localStorage.getItem(HOME_KEY) || 'null')
 } catch {}
 rig.setHome(savedHome || DEFAULT_HOME, { jump: true })
-const intro = { t: 0, dur: 6.5, from: { distance: 410, polar: THREE.MathUtils.degToRad(74) }, active: !new URLSearchParams(location.search).has('nointro') }
+const intro = { t: 0, dur: 6.5, from: { distance: 410, polar: THREE.MathUtils.degToRad(74) }, active: !new URLSearchParams(location.search).has('nointro') && !LIFTOFF }
 const homeDistance = rig.desiredDistance
 const homePolar = rig.desiredPolar
 if (intro.active) {
@@ -1651,9 +1799,15 @@ engine.add({
       sky.setTime(THREE.MathUtils.lerp(timeTween.from, timeTween.to, e))
       if (timeTween.t >= 1) timeTween = null
     }
+    rocket?.update(dt)
     if (vr.active) vr.update(dt)
     else if (riding) {
       // the bus drives the camera, after life has moved the bus (below)
+    } else if (flying) {
+      // the rocket's cinematography, and the rig kept underneath so the sky follows along
+      rocket.camera(engine.camera, dt, look)
+      const p = rocket.pos || rocket.pad
+      rig.target.set(p.x, 0, p.z)
     } else if (walk.active) walk.update(dt)
     else rig.update(dt)
     // outside, the prompt offers whoever you are standing next to; inside a castle it is the
@@ -1665,13 +1819,19 @@ engine.add({
     }
     sky.setFocus(vr.active ? vr.player.position : rig.target)
     sky.update(dt, elapsed, engine.camera)
+    // going to space overrides the sky, the fog and the clip planes; landing hands them back
+    if (flying) {
+      rocket.afterSky(engine.camera)
+      if (vr.active) vr.followRide?.()
+      flyBar()
+    }
     // the campus lights come up as the sun goes down: windows, lamps, neon bands, bloom
     const nightK = 1 - (sky.dayFactor ?? 1)
     setNight(nightK)
     const bloomWanted = Math.round((0.22 + nightK * 0.55) * 100) / 100
     // straight onto the pass: a settings write resizes the drawing buffer, and that blanks a frame
     if (engine.bloomPass) engine.bloomPass.strength = bloomWanted
-    if (!vr.active) labels.update()
+    if (!vr.active && !flying) labels.update()
     campus.tick(dt, engine.camera)
     if (inside.course) {
       inside.hall?.tick(dt, elapsed)
@@ -1704,6 +1864,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyE' && walk.active && nearId && !hud.chatOpen) startChat(nearId)
   if (e.code === 'Escape' && hud.chatOpen) hud.closeChat()
   else if (e.code === 'Escape' && riding) alight()
+  else if (e.code === 'Escape' && flying) leaveRocket()
 })
 
 // ── go ──────────────────────────────────────────────────────────────────────────────────
@@ -1715,6 +1876,7 @@ async function boot() {
     loadMe()
     mountBubble()
     if (params.get('ride') === 'bus') setTimeout(board, 400)
+    if (LIFTOFF) setTimeout(() => stealRocket({ count: 5 }), 600)
     for (const f of FAMOUS) {
       // Socrates teaches the class in the amphitheater
       if (f.id === 'socrates' && life.lecture) {
@@ -1739,7 +1901,7 @@ async function boot() {
   }
   engine.start()
   hud.removeBoot()
-  if (!localStorage.getItem('unlimitedcampus.seen')) {
+  if (!LIFTOFF && !localStorage.getItem('unlimitedcampus.seen')) {
     // never over a ride: a ?ride=bus link boards at once, and six seconds later this used to
     // drop the help panel straight across the view from the deck
     setTimeout(() => !riding && hud.toggleHelp(true), 6500)
@@ -1760,4 +1922,4 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
 engine.canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); console.warn('webgl context lost'); hud.toast('Graphics context lost, reloading…', 'err'); setTimeout(() => location.reload(), 1500) })
 
 // handy for probes
-window.__campus = { engine, rig, sky, campus, astronauts, roster, settings, hud, vr, people, playBadge, fireworks, life, walk, startChat, enterCastle, leaveCastle, openModule, inside, COURSES, LITE }
+window.__campus = { engine, rig, sky, campus, astronauts, roster, settings, hud, vr, people, playBadge, fireworks, life, walk, startChat, enterCastle, leaveCastle, openModule, inside, COURSES, LITE, rocket, stealRocket, leaveRocket, look, get flying() { return flying } }
