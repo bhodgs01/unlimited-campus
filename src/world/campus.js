@@ -15,6 +15,7 @@
 import * as THREE from 'three'
 import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js'
 import { build, hashStr, mulberry32 } from './pieces.js'
+import { makeSea } from './water.js'
 import { CASTLES } from '../data/castles.js'
 import { BADGE_ART } from '../data/art.js'
 import { artTexture } from './badgeMoment.js'
@@ -374,12 +375,7 @@ export function buildCampus(scene, { shadows = true, lite = false, merge = true 
     const c = Math.cos((d / COVE.half) * (P / 2))
     return c * c
   }
-  const seaMat = new THREE.MeshStandardMaterial({ color: 0x2a6fb5, roughness: 0.55, metalness: 0.0, emissive: new THREE.Color(0x061e3a) })
-  const sea = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5000), seaMat)
-  sea.rotation.x = -P / 2
-  sea.position.y = SEA_Y
-  sea.name = 'sea'
-  group.add(sea)
+  let sea = null
   const lawnMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.96, metalness: 0, map: lawnTexture() })
   lawnMat.map.repeat.set(1 / 26, 1 / 26)
   const cliffMat = new THREE.MeshStandardMaterial({ color: 0x9b8462, roughness: 1, metalness: 0 })
@@ -401,6 +397,17 @@ export function buildCampus(scene, { shadows = true, lite = false, merge = true 
     const pz = Math.sin(t) * ISLAND.rz * k
     if (i === 0) islandShape.moveTo(px, pz)
     else islandShape.lineTo(px, pz)
+  }
+  // the sea, coloured by its depth off this coast (see water.js)
+  {
+    const shore = []
+    for (let i = 0; i < 200; i++) {
+      const t = (i / 200) * P * 2
+      const k = islandRadius(t)
+      shore.push({ x: Math.cos(t) * ISLAND.rx * k, z: Math.sin(t) * ISLAND.rz * k })
+    }
+    sea = makeSea({ seaY: SEA_Y, far: 2500, shores: [shore], lite })
+    group.add(sea.group)
   }
   const islandGeo = new THREE.ExtrudeGeometry(islandShape, { depth: ISLAND.wall, bevelEnabled: false, curveSegments: 1 })
   islandGeo.rotateX(P / 2)
@@ -817,8 +824,7 @@ export function buildCampus(scene, { shadows = true, lite = false, merge = true 
       bg.computeVertexNormals()
       return bg
     }
-    const shallows = new THREE.Mesh(band(-0.5, 14, SEA_Y + 0.03), new THREE.MeshBasicMaterial({ color: 0x5fd0d8, transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide }))
-    group.add(shallows)
+    // (the shallows are the water's own colour now, see water.js)
     const foamMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6, depthWrite: false, side: THREE.DoubleSide })
     const foam = new THREE.Mesh(band(-0.3, 1.1, SEA_Y + 0.06), foamMat)
     const foam2 = new THREE.Mesh(band(2.6, 3.3, SEA_Y + 0.05), foamMat.clone())
@@ -1720,8 +1726,10 @@ export function buildCampus(scene, { shadows = true, lite = false, merge = true 
     floodlights: (instances.get('floodlight') || []).map((t) => ({ x: t.x, z: t.z, ry: t.ry })),
     groundY: (x, z) => beach.yAt(x, z) ?? 0,
     stats: { placed: placedCount, instanced: [...instances.values()].reduce((n, t) => n + t.length, 0), animated: animated.length, flats: flats.length, rejected: rejected.length, merged: mergeStats.roots, mergedMeshes: mergeStats.meshes },
+    sea,
     tick(dt, camera) {
       for (const b of animated) b.tick(dt)
+      sea?.tick(dt)
       // the art plates over the kiosks turn slowly to face whoever is looking
       if (camera) for (const pl of kioskPlates) pl.rotation.y = Math.atan2(camera.position.x - pl.position.x, camera.position.z - pl.position.z)
     },

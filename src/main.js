@@ -83,6 +83,7 @@ setNight(0)
 // ── the campus ──────────────────────────────────────────────────────────────────────────
 const shadows = settings.shadowSize > 0
 const campus = buildCampus(engine.scene, { shadows, lite: LITE, merge: !params.has('nomerge') })
+campus.sea?.bind(sky)
 console.log('[campus]', campus.stats)
 
 const nav = new Navigation()
