@@ -19,7 +19,7 @@ import * as THREE from 'three'
 const RIPPLE_SIZE = 256
 const DEPTH_SIZE = 512
 /** How far out from the shore the shelf colour and the foam reach, in metres. */
-const SHELF = 46
+const SHELF = 34
 
 /** A tileable value-noise heightfield: RG = gradient (0.5 centred), B = the height itself. */
 function rippleTexture(seed = 7) {
@@ -128,6 +128,8 @@ function depthTexture(shores, bounds) {
   const tex = new THREE.CanvasTexture(cv)
   tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping
   tex.colorSpace = THREE.NoColorSpace
+  // canvas rows run down the page and so does z: no flip, or the map mirrors along z
+  tex.flipY = false
   return tex
 }
 
@@ -309,7 +311,7 @@ export function makeSea({ seaY, far, shores, margin = 90, segments = 160, lite =
   group.add(outer)
 
   const water = { algae: 0, silt: 0, stain: 0 }
-  const base = { shallow: new THREE.Color(0x5fd4dc), deep: new THREE.Color(0x174680) }
+  const base = { shallow: new THREE.Color(0x49b9c9), deep: new THREE.Color(0x174680) }
   const tmp = new THREE.Color()
   /** Tint the water the way Jerlov would: algae greens it, silt browns it, stain yellows it. */
   const setWater = ({ algae = water.algae, silt = water.silt, stain = water.stain } = {}) => {
