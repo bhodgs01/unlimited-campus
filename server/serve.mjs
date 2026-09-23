@@ -1,6 +1,6 @@
 import http from 'node:http'
 import fsp from 'node:fs/promises'
-import { createReadStream } from 'node:fs'
+import { createReadStream, existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { needsAuth, hasValidAuth, checkPassword, makeSetCookie, loginPage, authEnabled, currentUser, knownUsers, chatUsers, canChat } from './auth.mjs'
@@ -17,7 +17,8 @@ const DIST = path.join(here, '..', 'dist')
  * root. Without it (local dev, the DR copy) the root just sends you to /campus/.
  */
 const BASE = '/campus'
-const DASH_DIST = process.env.DASH_DIST ? path.resolve(process.env.DASH_DIST) : ''
+// a DASH_DIST with nothing built in it (its build was skipped) counts as no dashboard at all
+const DASH_DIST = process.env.DASH_DIST && existsSync(path.join(process.env.DASH_DIST, 'index.html')) ? path.resolve(process.env.DASH_DIST) : ''
 // The Ask + Log-a-ticket bubble rides along on the 2D pages too, so tickets come from either app.
 const BUBBLE_TAG = `<script type="module" src="${BASE}/bubble.js"></script>`
 /**
@@ -336,5 +337,5 @@ const server = http.createServer(async (req, res) => {
 })
 
 server.listen(PORT, HOST, () => {
-  console.log(`Unlimited Campus -> http://${HOST}:${PORT} (auth ${authEnabled() ? 'on' : 'off'})`)
+  console.log(`Unlimited Campus -> http://${HOST}:${PORT} (auth ${authEnabled() ? 'on' : 'off'}, dashboard ${DASH_DIST ? 'at /' : 'off'})`)
 })
