@@ -129,6 +129,95 @@ const WHO = { blake: 'Blake Hodgson', alan: 'Alan Smithson', unlimited: 'Campus 
  * `user` is the signed-in username, so nobody has to type who they are.
  * Returns { ticket: { id, title, priority, tagged, attached } } or { error }.
  */
+// Blake, 23 Sep: "UA should be able to see past tickets." Filing has been rolled out to every
+// client app for a while; reading them back existed only in Collectorz, so everywhere else a
+// ticket went in and nothing ever came out. This is the read half, and only the read half:
+// replying stays a Collectorz-only thing on purpose, so there is one place to keep track of.
+//
+// Who sees what. Blake sees the whole campus board, because it is his. Alan and a campus guest
+// see the UA side of it, which is both of them together rather than each in isolation: the team
+// files as a guest and Alan needs to see what his team asked for. Nobody but Blake sees a ticket
+// Blake filed, since those are the internal ones.
+const UA_SIDE = new Set(['Alan Smithson', 'Campus guest'])
+const submittedBy = (description) => {
+  const d = String(description || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ')
+  const m = d.match(/Submitted by:\s*\**\s*([^\n*]+?)\s*(?:\*\*|\n|$)/i)
+  return m ? m[1].trim() : ''
+}
+// What they wrote, without our filing header on the front of it.
+const bodyOf = (description) => {
+  const d = String(description || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+  const lines = d.split('\n').filter((l) => !/^\s*\*\*(Source|Type|Priority|Submitted by|Where on campus):/i.test(l))
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim()
+}
+
+export async function myTickets(user) {
+  if (!ticketsEnabled()) return { error: 'Ticketing not configured' }
+  const me = WHO[user] || ''
+  if (!me) return { tickets: [] }
+
+  // Vikunja caps a page at 50 however large a per_page you ask for, and says nothing about it in
+  // the body, so everything past the fiftieth would simply be missing. Page until a short one.
+  let tasks = []
+  try {
+    for (let page = 1; page <= 20; page++) {
+      const r = await api('GET', `/projects/${PROJECT_ID}/tasks?per_page=50&page=${page}`)
+      const chunk = Array.isArray(r.body) ? r.body : []
+      if (!chunk.length) break
+      tasks = tasks.concat(chunk)
+      if (chunk.length < 50) break
+    }
+  } catch (e) {
+    return { error: 'could not read the board: ' + (e && e.message ? e.message : 'unknown') }
+  }
+
+  const canSee = (by) => (user === 'blake' ? true : UA_SIDE.has(by))
+  const mine = tasks.filter((t) => canSee(submittedBy(t.description)))
+  // Open first, newest first inside each half: what is still outstanding is what you came for.
+  mine.sort((a, b) => (Boolean(a.done) === Boolean(b.done) ? b.id - a.id : a.done ? 1 : -1))
+
+  // The project listing carries no comments, only the per-task endpoint does, and the answer is
+  // the entire point of looking. Fetched in small batches so a long board does not open forty
+  // connections at once.
+  const answers = {}
+  for (let i = 0; i < mine.length; i += 8) {
+    await Promise.all(
+      mine.slice(i, i + 8).map(async (t) => {
+        try {
+          const r = await api('GET', `/tasks/${t.id}/comments`)
+          answers[t.id] = (Array.isArray(r.body) ? r.body : [])
+            .map((c) => ({ text: bodyOf(c.comment), at: c.created }))
+            .filter((c) => c.text)
+        } catch {
+          answers[t.id] = []
+        }
+      }),
+    )
+  }
+
+  return {
+    who: me,
+    tickets: mine.map((t) => ({
+      id: t.id,
+      title: String(t.title || ''),
+      done: Boolean(t.done),
+      created: t.created,
+      by: submittedBy(t.description),
+      detail: bodyOf(t.description),
+      // Every comment on this board is ours: there is no way for them to reply here, which is
+      // why they can be shown as answers without working out who wrote which.
+      answers: answers[t.id] || [],
+    })),
+  }
+}
+
 export async function createTicket(raw, user = '') {
   if (!ticketsEnabled()) return { error: 'Ticketing not configured' }
 

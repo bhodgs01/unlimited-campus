@@ -5,7 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { needsAuth, hasValidAuth, checkPassword, makeSetCookie, loginPage, authEnabled, currentUser, knownUsers, chatUsers, canChat } from './auth.mjs'
 import { thread, send, markRead, unreadFor, chatReadonly } from './chat.mjs'
-import { createTicket, ticketsEnabled } from './tickets.mjs'
+import { createTicket, myTickets, ticketsEnabled } from './tickets.mjs'
 import { pushEnabled, vapidPublicKey, subscribe, unsubscribe, notify, deviceCount } from './push.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -114,6 +114,15 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === '/api/ticket-config') {
     json(200, { enabled: ticketsEnabled(), user: currentUser(req) })
     return
+  }
+
+  // What they have asked for before, and what we said back. Read only: replying to a ticket is
+  // a Collectorz-only thing, so there is one thread to keep track of rather than ten.
+  if (url.pathname === '/api/my-tickets') {
+    const user = currentUser(req)
+    if (!user) return json(401, { error: 'sign in first' })
+    const out = await myTickets(user)
+    return json(out.error ? 502 : 200, out)
   }
 
   if (url.pathname === '/api/ticket' && req.method === 'POST') {

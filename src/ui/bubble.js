@@ -41,6 +41,22 @@ const CSS = `
 .cb-tab.active{color:#fff;border-bottom-color:#E501FF}
 .cb-pane{display:none;flex-direction:column;min-height:0;flex:1}
 .cb-pane.active{display:flex}
+/* the past tickets list: a board you read, not one you work */
+.cb-mine{overflow:auto;padding:10px 12px 14px;display:flex;flex-direction:column;gap:8px;min-height:0}
+.cb-mine .cb-empty{color:#98a2c0;font-size:13px;padding:14px 2px;line-height:1.5}
+.cb-tk{border:1px solid rgba(255,255,255,.1);border-radius:11px;padding:9px 11px;background:rgba(255,255,255,.03)}
+.cb-tk>summary{cursor:pointer;list-style:none;display:flex;gap:8px;align-items:baseline}
+.cb-tk>summary::-webkit-details-marker{display:none}
+.cb-tk .t{flex:1;font-size:13px;color:#e6e8ef;line-height:1.35}
+.cb-tk .s{font-family:ui-monospace,monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+  padding:2px 7px;border-radius:999px;white-space:nowrap;border:1px solid rgba(255,255,255,.16);color:#98a2c0}
+.cb-tk .s.done{color:#7ee3a8;border-color:rgba(126,227,168,.4)}
+.cb-tk .body{margin-top:8px;font-size:12.5px;color:#b9c0d4;line-height:1.5;white-space:pre-wrap}
+.cb-tk .ans{margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.08);font-size:12.5px;
+  color:#e6e8ef;line-height:1.5;white-space:pre-wrap}
+.cb-tk .ans b{display:block;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#E501FF;
+  font-weight:600;margin-bottom:3px}
+.cb-mine .cb-who{font-size:11px;color:#98a2c0;padding:2px 2px 0}
 .cb-body{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;min-height:130px}
 .cb-msg{font-size:13.5px;padding:9px 12px;border-radius:13px;max-width:88%}
 .cb-msg.them{background:rgba(229,1,255,.14);border:1px solid rgba(229,1,255,.32);align-self:flex-start;
@@ -99,6 +115,7 @@ const HTML = `
   <div class="cb-tabs" role="tablist">
     <button class="cb-tab active" data-pane="chat">Ask</button>
     <button class="cb-tab" data-pane="ticket">Log a ticket</button>
+    <button class="cb-tab" data-pane="mine">My tickets</button>
   </div>
   <div class="cb-pane active" id="cbPaneChat">
     <div class="cb-body" id="cbBody"></div>
@@ -143,6 +160,9 @@ const HTML = `
       <div class="cb-note" id="cbNote"></div>
       <button type="submit">Send ticket</button>
     </form>
+  </div>
+  <div class="cb-pane" id="cbPaneMine">
+    <div class="cb-mine" id="cbMine"></div>
   </div>
 </div>`
 
@@ -200,6 +220,8 @@ export function mountBubble() {
       for (const t of wrap.querySelectorAll('.cb-tab')) t.classList.toggle('active', t === tab)
       $('#cbPaneChat').classList.toggle('active', tab.dataset.pane === 'chat')
       $('#cbPaneTicket').classList.toggle('active', tab.dataset.pane === 'ticket')
+      $('#cbPaneMine').classList.toggle('active', tab.dataset.pane === 'mine')
+      if (tab.dataset.pane === 'mine') loadMine()
     })
   }
 
@@ -208,6 +230,52 @@ export function mountBubble() {
       type = b.dataset.type
       for (const o of wrap.querySelectorAll('.cb-type-btn')) o.classList.toggle('selected', o === b)
     })
+  }
+
+  // Blake, 23 Sep: "UA should be able to see past tickets." What was asked for, what state it is
+  // in, and what we said back. Read only: replying is Collectorz-only on purpose.
+  let mineAt = 0
+  const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+  async function loadMine(force = false) {
+    const box = $('#cbMine')
+    if (!box) return
+    // A minute is long enough that flipping between tabs does not hammer the board, and short
+    // enough that an answer written while they are looking turns up when they look again.
+    if (!force && Date.now() - mineAt < 60000 && box.children.length) return
+    box.innerHTML = '<div class="cb-empty">Reading the board\u2026</div>'
+    try {
+      const res = await fetch('/api/my-tickets', { credentials: 'same-origin' })
+      const data = await res.json()
+      if (!res.ok || data.error) throw new Error(data.error || 'could not read the board')
+      mineAt = Date.now()
+      const list = data.tickets || []
+      if (!list.length) {
+        box.innerHTML = '<div class="cb-empty">Nothing yet. Anything logged from the "Log a ticket" tab shows up here, with the answer when there is one.</div>'
+        return
+      }
+      const when = (iso) => {
+        const d = new Date(iso)
+        return isNaN(d) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+      }
+      const open = list.filter((t) => !t.done).length
+      box.innerHTML =
+        `<div class="cb-who">${open} open of ${list.length}, as ${esc(data.who)}</div>` +
+        list
+          .map(
+            (t) =>
+              `<details class="cb-tk"><summary><span class="t">${esc(t.title)}</span>` +
+              `<span class="s${t.done ? ' done' : ''}">${t.done ? 'done' : 'open'}</span></summary>` +
+              (t.detail ? `<div class="body">${esc(t.detail)}</div>` : '') +
+              (t.answers || [])
+                .map((a) => `<div class="ans"><b>Reply${a.at ? ' \u00b7 ' + when(a.at) : ''}</b>${esc(a.text)}</div>`)
+                .join('') +
+              (!t.answers || !t.answers.length ? '<div class="ans"><b>No answer yet</b>It is on the board.</div>' : '') +
+              `</details>`,
+          )
+          .join('')
+    } catch (err) {
+      box.innerHTML = `<div class="cb-empty">Could not read the board just now. ${esc(err.message || '')}</div>`
+    }
   }
 
   async function ask() {
@@ -290,7 +358,8 @@ export function mountBubble() {
         return
       }
       note.className = 'cb-note ok'
-      note.textContent = `Thanks, logged as #${data.ticket.id}.` + (data.ticket.attached ? ' (file attached)' : '')
+      note.textContent = `Thanks, logged as #${data.ticket.id}.` + (data.ticket.attached ? ' (file attached)' : '') + ' It is under My tickets.'
+      mineAt = 0   // so the new one is there the moment they look
       $('#cbT').value = ''
       $('#cbD').value = ''
       $('#cbF').value = ''
