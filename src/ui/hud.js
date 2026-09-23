@@ -82,10 +82,26 @@ const CSS = `
 .uc-course .mod span{font-size:12.5px;line-height:1.35}
 .uc-course .mod small{display:block;color:var(--muted);font-size:11px}
 .uc-course .foot{padding:9px;border-top:1px solid var(--line);display:flex;gap:6px}
-.uc-media{position:absolute;left:50%;bottom:96px;transform:translateX(-50%);display:none;gap:6px;padding:7px;pointer-events:auto;align-items:center}
+.uc-media{position:absolute;left:50%;bottom:96px;transform:translateX(-50%);display:none;flex-direction:column;gap:6px;padding:7px;pointer-events:auto;max-width:calc(100vw - 28px)}
 .uc-media.open{display:flex}
+.uc-media .items{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.uc-media .player{display:none;align-items:center;gap:6px;min-width:min(520px,calc(100vw - 42px))}
+.uc-media .player.on{display:flex}
+.uc-media .player .btn{min-width:38px;padding:0 9px}
+.uc-media .player input[type=range]{flex:1;min-width:90px;accent-color:#E501FF;cursor:pointer}
+.uc-media .player .t{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.hud.inside .rail,.hud.inside .uc-chips,.hud.inside .uc-people,.hud.inside .uc-famous,.hud.inside .uc-mantra,.hud.inside .uc-tidy,.hud.inside .uc-walkhint{display:none!important}
+.hud.inside .uc-media{bottom:max(14px,env(safe-area-inset-bottom))}
+.uc-course .head{cursor:pointer;position:relative;padding-right:34px!important}
+.uc-course .head::after{content:'▾';position:absolute;right:14px;top:13px;opacity:.6;transition:transform .2s}
+.uc-course.min .head::after{transform:rotate(-90deg)}
+.uc-course.min .mods,.uc-course.min .head small{display:none}
+/* phones: the quest card and the media bar both ran full width at the bottom, and the card sat on
+   top of the play buttons. Inside a castle the card moves up under the folded course panel. */
+@media (max-width:640px){.hud.inside .uc-course{z-index:7}.hud.inside .uc-course.min{width:auto;max-width:calc(100vw - 28px)}.hud.inside .uc-quest{top:170px;bottom:auto;left:14px;right:14px;width:auto}}
 .uc-media .btn{white-space:nowrap}
-.uc-media .now{font-size:12px;color:var(--muted);padding:0 6px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.uc-media .now{font-size:12px;color:var(--muted);padding:0 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center}
+.uc-media .now:empty{display:none}
 .uc-quest{position:absolute;right:14px;bottom:96px;width:min(320px,calc(100vw - 28px));padding:13px 14px;display:none;flex-direction:column;gap:8px;pointer-events:auto}
 .uc-quest.open{display:flex}
 .uc-quest h4{margin:0;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:#AFFF00}
@@ -194,7 +210,7 @@ export class Hud {
         <div class="mods"></div>
         <div class="foot"><button class="btn" data-act="leavecastle">Leave the castle</button><button class="btn primary" data-act="askguide">Ask your guide</button></div>
       </div>
-      <div class="panel uc-media"><span class="now"></span></div>
+      <div class="panel uc-media"><div class="now"></div><div class="player"><button class="btn" type="button" data-p="back" title="Back 10 seconds">&#8634; 10</button><button class="btn primary" type="button" data-p="toggle" title="Play / pause">&#9208;</button><button class="btn" type="button" data-p="fwd" title="Forward 10 seconds">10 &#8635;</button><input type="range" min="0" max="1000" value="0" aria-label="Seek"><span class="t">0:00 / 0:00</span><button class="btn" type="button" data-p="mute" title="Mute">&#128266;</button></div><div class="items"></div></div>
       <div class="panel uc-quest"><h4></h4><p></p><div class="pips"></div><div class="row"></div></div>
       <div class="panel uc-prompt"></div>
       <div class="uc-walkhint"><kbd>W A S D</kbd> to walk · drag to look · <kbd>Shift</kbd> to jog · <kbd>Esc</kbd> to fly again</div>
@@ -209,6 +225,7 @@ export class Hud {
     this.prompt = this.$('.uc-prompt')
     this.walkHint = this.$('.uc-walkhint')
     this.course = this.$('.uc-course')
+    this.$('.uc-course .head').addEventListener('click', () => this.course.classList.toggle('min'))
     this.media = this.$('.uc-media')
     this.quest = this.$('.uc-quest')
     this.$('.uc-chat form').addEventListener('submit', (ev) => {
@@ -413,6 +430,8 @@ export class Hud {
       return
     }
     this.course.classList.add('open')
+    // in a module the list folds away to its title; tap the title to see every module again
+    this.course.classList.toggle('min', here != null)
     this.$('.uc-course .head b').textContent = course.name
     this.$('.uc-course .head small').textContent = course.tagline
     const pct = Math.round((done.length / course.modules.length) * 100)
@@ -435,14 +454,70 @@ export class Hud {
       return
     }
     this.media.classList.add('open')
-    this.media.innerHTML = '<span class="now"></span>'
+    const row = this.media.querySelector('.items')
+    row.innerHTML = ''
     for (const it of items) {
       const b = document.createElement('button')
       b.className = `btn${it.primary ? ' primary' : ''}`
       b.textContent = it.label
       b.addEventListener('click', it.fn)
-      this.media.appendChild(b)
+      row.appendChild(b)
     }
+  }
+
+  /**
+   * Transport for whatever is playing (the wall video or the podcast): play/pause, 10 s back and
+   * forward, a seek bar with the time, mute. `null` hides it.
+   */
+  setPlayer(el) {
+    this._unbindPlayer?.()
+    const pl = this.media.querySelector('.player')
+    pl.classList.toggle('on', Boolean(el))
+    if (!el) return
+    const [toggle, mute] = ['toggle', 'mute'].map((k) => pl.querySelector(`[data-p=${k}]`))
+    const range = pl.querySelector('input')
+    const time = pl.querySelector('.t')
+    const fmt = (s) => (Number.isFinite(s) ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}` : '0:00')
+    let seeking = false
+    const sync = () => {
+      toggle.innerHTML = el.paused ? '&#9654;' : '&#9208;'
+      mute.innerHTML = el.muted ? '&#128263;' : '&#128266;'
+      if (!seeking && el.duration) range.value = String(Math.round((el.currentTime / el.duration) * 1000))
+      time.textContent = `${fmt(el.currentTime)} / ${fmt(el.duration)}`
+    }
+    const acts = {
+      back: () => (el.currentTime = Math.max(0, el.currentTime - 10)),
+      fwd: () => (el.currentTime = Math.min(el.duration || 0, el.currentTime + 10)),
+      toggle: () => (el.paused ? el.play().catch(() => {}) : el.pause()),
+      mute: () => (el.muted = !el.muted),
+    }
+    const click = (ev) => acts[ev.target.closest('[data-p]')?.dataset.p]?.()
+    const input = () => {
+      seeking = true
+      if (el.duration) time.textContent = `${fmt((range.value / 1000) * el.duration)} / ${fmt(el.duration)}`
+    }
+    const change = () => {
+      if (el.duration) el.currentTime = (range.value / 1000) * el.duration
+      seeking = false
+    }
+    const events = ['timeupdate', 'play', 'pause', 'loadedmetadata', 'durationchange', 'volumechange', 'ended']
+    pl.addEventListener('click', click)
+    range.addEventListener('input', input)
+    range.addEventListener('change', change)
+    events.forEach((e) => el.addEventListener(e, sync))
+    sync()
+    this._unbindPlayer = () => {
+      pl.removeEventListener('click', click)
+      range.removeEventListener('input', input)
+      range.removeEventListener('change', change)
+      events.forEach((e) => el.removeEventListener(e, sync))
+      this._unbindPlayer = null
+    }
+  }
+
+  /** Inside a castle the outdoor chrome (castle chips, people, the rail) goes: it is a classroom. */
+  setInside(on) {
+    this.el.classList.toggle('inside', Boolean(on))
   }
 
   nowPlaying(text) {

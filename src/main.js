@@ -800,8 +800,11 @@ function enterCastle(castleId) {
     walk.cancelTravel()
     walk.setBounds(insideBounds)
     hud.closeCard()
+    hud.setInside(true)
     showCourseHud()
-    greetGuide(course)
+    // a quiet hello, not a chat window: the room was too busy with the panel open on arrival.
+    // "Ask your guide" opens the full conversation.
+    greetGuide(course, { quiet: true })
     // after the guide's greeting, because opening a chat clears the prompt line
     const hint = 'Walk onto the <b style="margin:0 3px">glowing circle</b> in the middle, or onto a lit gate'
     hud.showHint(hint)
@@ -823,6 +826,7 @@ function leaveCastle() {
     astronauts.group.visible = true
     people.list.forEach((pp) => (pp.g.visible = true))
     labels.toggle(true)
+    hud.setInside(false)
     hud.showCourse(null)
     hud.showMedia(null)
     hud.showQuest(null)
@@ -1056,6 +1060,7 @@ function playVideo(url, label) {
   media = media || {}
   inside.playing = { el, kind: 'video' }
   hud.nowPlaying(`▶ ${label}`)
+  hud.setPlayer(el)
   el.addEventListener('ended', () => hud.nowPlaying(''))
 }
 
@@ -1065,6 +1070,7 @@ function playAudio(url, label) {
   el.play().catch(() => hud.toast('Tap once to allow sound.'))
   inside.playing = { el, kind: 'audio' }
   hud.nowPlaying(`🎧 ${label}`)
+  hud.setPlayer(el)
   el.addEventListener('ended', () => hud.nowPlaying(''))
 }
 
@@ -1085,6 +1091,7 @@ function stopMedia() {
   } catch {}
   inside.playing = null
   hud.nowPlaying('')
+  hud.setPlayer(null)
 }
 
 /** Finish a module: the gate lights, the pillar fills, the cannons fire. */
@@ -1143,17 +1150,21 @@ function fireConfetti() {
 const confettiTicks = new Set()
 
 /** The Awesomenaut who runs this hall greets you, in character and in voice. */
-function greetGuide(course) {
+function greetGuide(course, { quiet = false } = {}) {
   const g = COURSE_GUIDES[course.guide]
   if (!g) return
   const done = doneModules(course.id).length
   chat.with = course.guide
   chat.history = []
   chat.course = course
-  hud.openChat({ name: g.name, known: `${g.role} · your guide for ${course.name}`, face: '' })
   const line = done
     ? `Welcome back. ${done} of ${course.modules.length} done — shall we pick up at module ${Math.min(done + 1, course.modules.length)}?`
     : `Welcome to the ${course.name} hall. ${course.tagline}. Step through gate one when you are ready, or ask me anything first.`
+  if (quiet) {
+    hud.toast(`${g.name}: ${line}`)
+    return
+  }
+  hud.openChat({ name: g.name, known: `${g.role} · your guide for ${course.name}`, face: '' })
   hud.say('them', line)
   speak(line, { luna: 'julia', orion: 'rock', atlas: 'macgyver' }[course.guide])
 }
