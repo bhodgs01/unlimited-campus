@@ -1,7 +1,7 @@
 /**
  * Drop in and walk. The orbit rig is for looking at the campus; this is for being in it.
  *
- * WASD (or the arrows) to move, drag to look, shift to jog, and on a phone a thumbstick in
+ * WASD (or the arrows) to move, drag to look, hold Space (or Shift) to run, and on a phone a thumbstick in
  * the bottom-left corner with a drag anywhere else to look. Refused steps come from the same
  * navigation grid the students walk on, so you cannot walk through a castle, and the ground
  * under you is the campus's own height (the beach slopes).
@@ -9,8 +9,8 @@
 import * as THREE from 'three'
 
 const EYE = 1.68
-const WALK = 3.2
-const JOG = 6.4
+const WALK = 6.4
+const JOG = 12.8
 const ACCEL = 14
 const LOOK = 0.0032
 
@@ -173,7 +173,8 @@ export class WalkMode {
       side += this.stick.dx
     }
     const len = Math.hypot(fwd, side) || 1
-    let speed = k.has('ShiftLeft') || k.has('ShiftRight') ? JOG : WALK
+    // hold Space (or Shift) to run at double the walking pace
+    let speed = k.has('Space') || k.has('ShiftLeft') || k.has('ShiftRight') ? JOG : WALK
 
     // travelling to something you clicked: steer yourself until you are there
     if (this.travel) {
