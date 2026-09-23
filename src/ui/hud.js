@@ -1,5 +1,5 @@
 /**
- * A lean HUD for the campus: a title, a left rail (Home, Orbit, Day/Night, Help), the six
+ * A lean HUD for the campus: a left rail (Home, Orbit, Day/Night, Help), the six
  * castle chips along the bottom, a card for whatever was clicked, and toasts. Built on the
  * colony's stylesheet (.hud .panel .btn .rail .chips .chip .toasts) plus a few rules of its
  * own, so the two apps stay visually related.
@@ -20,14 +20,10 @@ const ICON = {
 }
 
 const CSS = `
-.uc-title{position:absolute;left:14px;top:14px;padding:10px 14px;display:flex;align-items:center;gap:10px;pointer-events:auto}
-.uc-title b{font-family:Helvetica,'Helvetica Neue',Arial,sans-serif;font-size:14px;letter-spacing:.14em;text-transform:uppercase;font-weight:700}
 .uc-card h2,.uc-help h3{font-family:Helvetica,'Helvetica Neue',Arial,sans-serif}
 .uc-card .btn.primary{color:#fff}
 .uc-mantra{position:absolute;right:14px;bottom:max(14px,env(safe-area-inset-bottom));color:rgba(255,255,255,.55);font-size:12px;font-style:italic;pointer-events:none}
 @media (max-width:900px){.uc-mantra{display:none}}
-.uc-title i{width:9px;height:9px;border-radius:50%;background:${BRAND.purple};box-shadow:0 0 12px ${BRAND.purple}}
-.uc-title small{color:var(--muted);font-size:12px}
 .uc-chips{position:absolute;left:50%;bottom:max(14px,env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;gap:6px;padding:6px;max-width:calc(100vw - 28px);flex-wrap:wrap;justify-content:center}
 .uc-chips .chip{display:flex;align-items:center;gap:7px;color:var(--text);white-space:nowrap;flex:0 0 auto}
 .uc-chips .chip i{width:8px;height:8px;border-radius:50%;display:inline-block}
@@ -51,7 +47,8 @@ const CSS = `
 .uc-help h3{margin:0 0 4px;font-size:16px}
 .uc-help p{margin:0;color:var(--muted);font-size:13.5px;line-height:1.5}
 .uc-help kbd{font:inherit;font-size:12px;padding:1px 6px;border:1px solid var(--line);border-radius:6px;background:rgba(255,255,255,.06)}
-.uc-people{position:absolute;left:14px;top:66px;display:flex;gap:6px;padding:5px;pointer-events:auto}
+.uc-logo{position:absolute;left:14px;top:14px;width:44px;height:44px;border-radius:12px;background:#f7f7f7 url(/ua-mark.jpg) center/88% no-repeat;box-shadow:0 4px 14px rgba(0,0,0,.35);pointer-events:none}
+.uc-people{position:absolute;left:68px;top:14px;display:flex;gap:6px;padding:5px;pointer-events:auto}
 .uc-people button{display:flex;align-items:center;gap:7px;height:34px;padding:0 11px 0 4px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--text);font:inherit;font-size:12.5px;cursor:pointer}
 .uc-people button img{width:26px;height:26px;border-radius:50%;object-fit:cover;object-position:50% 30%;background:#2a2f3a}
 .uc-people button.active{background:rgba(229,1,255,.18);border-color:rgba(229,1,255,.55)}
@@ -60,7 +57,7 @@ const CSS = `
 .uc-people .facestack img:first-child{margin-left:0}
 .uc-people button .caret{opacity:.6;font-size:10px;margin-left:2px;transition:transform .2s}
 .uc-people button.open .caret{transform:rotate(180deg)}
-.uc-famous{position:absolute;left:14px;top:112px;width:min(430px,calc(100vw - 28px));max-height:min(60vh,520px);overflow:auto;padding:10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px;pointer-events:auto;z-index:5}
+.uc-famous{position:absolute;left:14px;top:66px;width:min(430px,calc(100vw - 28px));max-height:min(60vh,520px);overflow:auto;padding:10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px;pointer-events:auto;z-index:5}
 .uc-famous[hidden]{display:none}
 .uc-famous .head{grid-column:1/-1;font-size:11px;letter-spacing:.12em;text-transform:uppercase;opacity:.65;padding:2px 4px 4px}
 .uc-famous button{display:flex;align-items:center;gap:8px;height:40px;padding:0 10px 0 4px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--text);font:inherit;font-size:12.5px;cursor:pointer;text-align:left;white-space:nowrap;overflow:hidden}
@@ -68,7 +65,7 @@ const CSS = `
 .uc-famous button.active{background:rgba(229,1,255,.18);border-color:rgba(229,1,255,.55)}
 .uc-famous button img{width:32px;height:32px;border-radius:50%;object-fit:cover;background:#2a2f3a;flex:none}
 .uc-toast{padding:9px 13px;border-radius:10px;font-size:12.5px;max-width:320px}
-.uc-course{position:absolute;left:14px;top:64px;width:min(300px,calc(100vw - 28px));max-height:min(74vh,620px);padding:0;display:none;flex-direction:column;pointer-events:auto;overflow:hidden}
+.uc-course{position:absolute;left:14px;top:66px;width:min(300px,calc(100vw - 28px));max-height:min(74vh,620px);padding:0;display:none;flex-direction:column;pointer-events:auto;overflow:hidden}
 .uc-course.open{display:flex}
 .uc-course .head{padding:13px 14px 11px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:3px}
 .uc-course .head b{font-family:Helvetica,'Helvetica Neue',Arial,sans-serif;font-size:16px;letter-spacing:.01em}
@@ -133,10 +130,18 @@ const CSS = `
 .uc-prompt{position:absolute;left:50%;bottom:112px;transform:translateX(-50%);display:none;align-items:center;gap:9px;padding:9px 14px;border-radius:999px;pointer-events:auto;cursor:pointer;font-size:13.5px}
 .uc-prompt.open{display:flex}
 .uc-prompt kbd{background:rgba(255,255,255,.1);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font:inherit;font-size:11.5px}
+.uc-tidy{position:absolute;left:14px;bottom:max(14px,env(safe-area-inset-bottom));width:40px;height:40px;min-width:40px;padding:0;display:flex;align-items:center;justify-content:center;pointer-events:auto;z-index:6}
+@media (max-width:640px){.uc-people{max-width:calc(100vw - 128px);overflow-x:auto;scrollbar-width:none}.uc-tidy{left:auto;right:14px;bottom:auto;top:max(14px,env(safe-area-inset-top))}}
+.hud.tidy .rail,.hud.tidy .uc-chips,.hud.tidy .uc-people,.hud.tidy .uc-famous,.hud.tidy .uc-mantra{display:none!important}
 .uc-walkhint{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);color:rgba(255,255,255,.72);font-size:12.5px;display:none;pointer-events:none;text-align:center}
 .uc-walkhint.open{display:block}
-@media (max-width:640px){.uc-chat{top:auto;bottom:64px;right:14px;left:14px;width:auto;max-height:56vh}.uc-card{top:auto;bottom:64px;right:14px;left:14px;width:auto}.uc-title small{display:none}}
+@media (max-width:640px){.uc-chat{top:auto;bottom:64px;right:14px;left:14px;width:auto;max-height:56vh}.uc-card{top:auto;bottom:64px;right:14px;left:14px;width:auto}}
 `
+
+const TIDY_ICON = {
+  hide: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 3.9M6.1 6.1C3.6 7.8 2 12 2 12s4 7 10 7a9.7 9.7 0 0 0 5.9-2.1"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>',
+  menu: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>',
+}
 
 export class Hud {
   constructor(root, settings, actions) {
@@ -149,7 +154,7 @@ export class Hud {
     this.el = document.createElement('div')
     this.el.className = 'hud'
     this.el.innerHTML = `
-      <div class="panel uc-title"><i></i><b>Unlimited Campus</b><small>The Human Operating System for the Intelligence Age</small></div>
+      <div class="uc-logo" role="img" aria-label="Unlimited Awesome"></div>
       <div class="panel uc-people"></div>
       <div class="panel uc-famous" hidden></div>
       <div class="panel rail">
@@ -194,6 +199,7 @@ export class Hud {
       <div class="panel uc-prompt"></div>
       <div class="uc-walkhint"><kbd>W A S D</kbd> to walk · drag to look · <kbd>Shift</kbd> to jog · <kbd>Esc</kbd> to fly again</div>
       <div class="uc-mantra">The Universe is conspiring to help me.</div>
+      <button class="panel btn uc-tidy" type="button" data-act="tidy"></button>
       <div class="toasts"></div>`
     root.appendChild(this.el)
     this.$ = (s) => this.el.querySelector(s)
@@ -215,6 +221,11 @@ export class Hud {
     })
     this.prompt.addEventListener('click', () => this.actions.talk?.())
     this.help = this.$('.uc-help')
+    // One button hides the menus so a phone screen is just the campus. Phones start tidy;
+    // whatever the person picks is remembered (storage can throw in private windows).
+    let saved = null
+    try { saved = localStorage.getItem('uc.tidy') } catch {}
+    this.setTidy(saved != null ? saved === '1' : matchMedia('(max-width: 640px)').matches, false)
     this.chips = this.$('.uc-chips')
 
     for (const c of CASTLES) {
@@ -236,6 +247,7 @@ export class Hud {
       else if (act === 'leavecastle') this.actions.leaveCastle?.()
       else if (act === 'askguide') this.actions.askGuide?.()
       else if (act === 'help') this.toggleHelp()
+      else if (act === 'tidy') this.setTidy(!this.el.classList.contains('tidy'), true)
       else actions[act]?.()
     })
     // hold Home to save the view
@@ -340,6 +352,15 @@ export class Hud {
   setVrActive(on) {
     this.$('[data-act="vr"]').classList.toggle('active', on)
   }
+  setTidy(on, remember) {
+    this.el.classList.toggle('tidy', on)
+    const b = this.$('.uc-tidy')
+    b.innerHTML = on ? TIDY_ICON.menu : TIDY_ICON.hide
+    b.title = on ? 'Show the menus' : 'Hide the menus'
+    b.setAttribute('aria-pressed', String(on))
+    if (remember) try { localStorage.setItem('uc.tidy', on ? '1' : '0') } catch {}
+  }
+
   toggleHelp(force) {
     this.help.classList.toggle('open', force)
   }
