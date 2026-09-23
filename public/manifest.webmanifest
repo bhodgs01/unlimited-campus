@@ -1,18 +1,18 @@
 {
-  "id": "/",
+  "id": "/campus/",
   "name": "Unlimited Campus",
   "short_name": "UA Campus",
   "description": "The Six Castles of Human Flourishing, as a walkable 3D and VR campus. The Human Operating System for the Intelligence Age.",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "display_override": ["fullscreen", "standalone"],
   "orientation": "any",
   "background_color": "#202020",
   "theme_color": "#202020",
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }

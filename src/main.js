@@ -1728,7 +1728,7 @@ boot()
 // isSecureContext rather than protocol === 'https:': same answer in production, and it also
 // covers localhost, where browsers allow workers and where the push flow has to be testable.
 if ('serviceWorker' in navigator && window.isSecureContext) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch((err) => console.warn('service worker', err)))
+  window.addEventListener('load', () => navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, { scope: import.meta.env.BASE_URL }).catch((err) => console.warn('service worker', err)))
 }
 
 engine.canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); console.warn('webgl context lost'); hud.toast('Graphics context lost, reloading…', 'err'); setTimeout(() => location.reload(), 1500) })

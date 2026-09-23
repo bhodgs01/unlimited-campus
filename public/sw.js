@@ -21,12 +21,12 @@ self.addEventListener('push', (event) => {
       if (watching) return
       return self.registration.showNotification(data.title || 'Unlimited Campus', {
         body: data.body || 'You have a new message.',
-        icon: '/icon-192.png',
-        badge: '/icon-192.png',
+        icon: new URL('icon-192.png', self.registration.scope).href,
+        badge: new URL('icon-192.png', self.registration.scope).href,
         // one notification per sender: a second message replaces the first rather than stacking
         tag: data.tag || 'chat',
         renotify: true,
-        data: { url: data.url || '/' },
+        data: { url: data.url || self.registration.scope },
       })
     }),
   )
@@ -36,11 +36,11 @@ self.addEventListener('push', (event) => {
 // is one rather than starting a second copy of a heavy 3D scene.
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const url = new URL(event.notification.data?.url || '/', self.location.origin)
+  const url = new URL(event.notification.data?.url || self.registration.scope, self.location.origin)
   const withWhom = url.searchParams.get('chat')
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-      const open = clients.find((c) => new URL(c.url).origin === self.location.origin)
+      const open = clients.find((c) => c.url.startsWith(self.registration.scope))
       if (open) {
         if (withWhom) open.postMessage({ type: 'open-chat', with: withWhom })
         return open.focus()

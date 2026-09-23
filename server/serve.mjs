@@ -7,9 +7,25 @@ import { needsAuth, hasValidAuth, checkPassword, makeSetCookie, loginPage, authE
 import { thread, send, markRead, unreadFor, chatReadonly } from './chat.mjs'
 import { createTicket, myTickets, ticketsEnabled } from './tickets.mjs'
 import { pushEnabled, vapidPublicKey, subscribe, unsubscribe, notify, deviceCount } from './push.mjs'
+import { handleGemini } from './gemini.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const DIST = path.join(here, '..', 'dist')
+/**
+ * One host, two apps. The 3D campus is built with base /campus/ and served from DIST under that
+ * prefix. When DASH_DIST points at a built copy of the UA dashboard (the 2D app), it owns the
+ * root. Without it (local dev, the DR copy) the root just sends you to /campus/.
+ */
+const BASE = '/campus'
+const DASH_DIST = process.env.DASH_DIST ? path.resolve(process.env.DASH_DIST) : ''
+// The Ask + Log-a-ticket bubble rides along on the 2D pages too, so tickets come from either app.
+const BUBBLE_TAG = `<script type="module" src="${BASE}/bubble.js"></script>`
+/**
+ * The campus used to live at the root with a service worker scoped to '/'. Phones that installed
+ * it still have that worker, and it would sit in front of the 2D app. This replacement removes
+ * itself and reloads whatever it was controlling, once.
+ */
+const RETIRE_SW = `self.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',(e)=>e.waitUntil(self.registration.unregister().then(()=>self.clients.matchAll({type:'window'})).then((cs)=>cs.forEach((c)=>c.navigate(c.url)))))`
 const PORT = Number(process.env.PORT) || 5275
 const HOST = process.env.HOST || '127.0.0.1'
 /** Where the course media lives: an NFS mount of the NAS in the cluster, a folder locally. */
@@ -37,10 +53,10 @@ const TYPES = {
   '.txt': 'text/plain; charset=utf-8',
 }
 
-function resolveInDist(pathname) {
+function resolveInDist(pathname, root = DIST) {
   const rel = decodeURIComponent(pathname).replace(/^\/+/, '')
-  const file = path.resolve(DIST, rel || 'index.html')
-  return file === DIST || file.startsWith(DIST + path.sep) ? file : null
+  const file = path.resolve(root, rel || 'index.html')
+  return file === root || file.startsWith(root + path.sep) ? file : null
 }
 
 const server = http.createServer(async (req, res) => {
@@ -52,9 +68,26 @@ const server = http.createServer(async (req, res) => {
     return
   }
 
+  if (url.pathname === '/sw.js') {
+    res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store' }).end(RETIRE_SW)
+    return
+  }
+  // Old links (a shared ?ride=bus, a notification's ?chat=alan) pointed at the root, which is the
+  // 2D app now. Send them on to the campus with their query intact.
+  if (url.pathname === '/' && /(^|&)(ride|chat|demo|lite|dept)=/.test(url.search.slice(1))) {
+    res.writeHead(302, { Location: `${BASE}/${url.search}`, 'Cache-Control': 'no-store' }).end()
+    return
+  }
+  if (url.pathname === BASE) {
+    res.writeHead(301, { Location: `${BASE}/${url.search}` }).end()
+    return
+  }
+
   if (needsAuth(req.headers.host)) {
     // the app shell an installer fetches without cookies: manifest, icons, service worker
-    const publicAsset = /^\/(icon-(192|512|maskable-512)\.png|apple-touch-icon\.png|favicon(-48\.png|\.ico)|manifest\.webmanifest|sw\.js|(badges|castles|models|family)\/.+)$/.test(url.pathname)
+    const publicAsset =
+      /^\/campus\/(icon-(192|512|maskable-512)\.png|apple-touch-icon\.png|favicon(-48\.png|\.ico)|manifest\.webmanifest|sw\.js|(badges|castles|models|family)\/.+)$/.test(url.pathname) ||
+      /^\/(favicon[^/]*|icon-(192|512)\.png|apple-touch-icon[^/]*\.png|manifest\.json)$/.test(url.pathname)
     if (url.pathname === '/api/login' && req.method === 'POST') {
       let body = ''
       req.on('data', (c) => {
@@ -184,7 +217,7 @@ const server = http.createServer(async (req, res) => {
       notify(to, {
         title: NAMES[me] || me,
         body: out.message.text,
-        url: `/?chat=${encodeURIComponent(me)}`,
+        url: `${BASE}/?chat=${encodeURIComponent(me)}`,
         tag: `chat-${me}`,
       }).catch(() => {})
       return json(200, out)
@@ -223,8 +256,15 @@ const server = http.createServer(async (req, res) => {
   // ── the course media, streamed from the NAS ─────────────────────────────────────────
   // Videos are 30 to 150 MB, so this streams with Range support rather than reading a file
   // into memory: without 206 replies a browser cannot seek and a headset stalls.
-  if (url.pathname.startsWith('/media/')) {
-    const rel = decodeURIComponent(url.pathname.slice('/media/'.length)).replace(/^\/+/, '')
+  // the 2D dashboard's Gemini calls: the key stays here, the browser sends its Auth0 token
+  if (url.pathname.startsWith('/api/gemini/')) {
+    await handleGemini(req, res, url)
+    return
+  }
+
+  const mediaPrefix = url.pathname.startsWith(`${BASE}/media/`) ? `${BASE}/media/` : url.pathname.startsWith('/media/') ? '/media/' : ''
+  if (mediaPrefix) {
+    const rel = decodeURIComponent(url.pathname.slice(mediaPrefix.length)).replace(/^\/+/, '')
     const target = path.resolve(MEDIA_DIR, rel)
     if (!target.startsWith(MEDIA_DIR + path.sep)) {
       res.writeHead(403).end('Forbidden')
@@ -262,7 +302,16 @@ const server = http.createServer(async (req, res) => {
     return
   }
 
-  let file = resolveInDist(url.pathname)
+  // /campus/... is the 3D app; everything else is the 2D app when it is here, else the campus
+  let root = DIST
+  let rel = url.pathname
+  if (url.pathname.startsWith(`${BASE}/`)) rel = url.pathname.slice(BASE.length)
+  else if (DASH_DIST) root = DASH_DIST
+  else if (url.pathname === '/') {
+    res.writeHead(302, { Location: `${BASE}/`, 'Cache-Control': 'no-store' }).end()
+    return
+  }
+  let file = resolveInDist(rel, root)
   if (!file) {
     res.writeHead(403).end('Forbidden')
     return
@@ -270,10 +319,13 @@ const server = http.createServer(async (req, res) => {
   try {
     if ((await fsp.stat(file)).isDirectory()) file = path.join(file, 'index.html')
   } catch {
-    file = path.join(DIST, 'index.html') // SPA fallback
+    file = path.join(root, 'index.html') // SPA fallback
   }
   try {
-    const body = await fsp.readFile(file)
+    let body = await fsp.readFile(file)
+    if (root === DASH_DIST && file === path.join(DASH_DIST, 'index.html')) {
+      body = Buffer.from(String(body).replace('</body>', `${BUBBLE_TAG}</body>`))
+    }
     const type = TYPES[path.extname(file)] || 'application/octet-stream'
     const cache = file.includes(`${path.sep}assets${path.sep}`) && !file.endsWith('.glb') ? 'public, max-age=31536000, immutable' : 'no-cache'
     res.writeHead(200, { 'Content-Type': type, 'Content-Length': body.length, 'Cache-Control': cache })

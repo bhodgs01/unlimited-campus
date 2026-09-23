@@ -47,7 +47,7 @@ const CSS = `
 .uc-help h3{margin:0 0 4px;font-size:16px}
 .uc-help p{margin:0;color:var(--muted);font-size:13.5px;line-height:1.5}
 .uc-help kbd{font:inherit;font-size:12px;padding:1px 6px;border:1px solid var(--line);border-radius:6px;background:rgba(255,255,255,.06)}
-.uc-logo{position:absolute;left:14px;top:14px;width:44px;height:44px;border-radius:12px;background:#f7f7f7 url(/ua-mark.jpg) center/88% no-repeat;box-shadow:0 4px 14px rgba(0,0,0,.35);pointer-events:none}
+.uc-logo{position:absolute;left:14px;top:14px;width:44px;height:44px;border-radius:12px;background:#f7f7f7 url(${import.meta.env.BASE_URL}ua-mark.jpg) center/88% no-repeat;box-shadow:0 4px 14px rgba(0,0,0,.35);pointer-events:none}
 .uc-people{position:absolute;left:68px;top:14px;display:flex;gap:6px;padding:5px;pointer-events:auto}
 .uc-people button{display:flex;align-items:center;gap:7px;height:34px;padding:0 11px 0 4px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--text);font:inherit;font-size:12.5px;cursor:pointer}
 .uc-people button img{width:26px;height:26px;border-radius:50%;object-fit:cover;object-position:50% 30%;background:#2a2f3a}

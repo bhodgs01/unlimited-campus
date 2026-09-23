@@ -103,7 +103,7 @@ export function makeSetCookie(user) {
 // while signed out (?chat=alan), landed on the plain campus instead of where it pointed. Same
 // origin, so there is no open redirect in this.
 export function loginPage({ error = false } = {}) {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Unlimited Campus</title><link rel="icon" href="/favicon.ico" sizes="48x48"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#202020"><style>
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Unlimited Campus</title><link rel="icon" href="/favicon.ico" sizes="48x48"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="manifest" href="/campus/manifest.webmanifest"><meta name="theme-color" content="#202020"><style>
   :root{color-scheme:dark}
   *{box-sizing:border-box}
   body{margin:0;height:100vh;display:grid;place-items:center;background:radial-gradient(1200px 800px at 50% -10%, #2a1233, #0c0f17 60%);color:#e6e8ef;font:16px/1.5 Helvetica,Arial,system-ui,sans-serif}
