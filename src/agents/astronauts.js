@@ -96,6 +96,8 @@ const PATH_BUDGET = 6
  * own units so the helmet does not have to be re-tuned when this moves.
  */
 const CREW_SCALE = 0.56
+/** Below this many pixels tall a character is drawn as a capsule, not the rig. */
+const FAR_PX = 18
 
 /**
  * Hats, as lathe profiles in helmet radii: [radius, height] pairs from the crown down to
@@ -218,6 +220,12 @@ export class Astronauts {
     const glowMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: true })
     parts.tip = this._mesh(new THREE.SphereGeometry(R * 0.125, 6, 4), glowMat, capacity, false)
     parts.lamp = this._mesh(new THREE.SphereGeometry(R * 0.16, 6, 5), glowMat.clone(), capacity, false)
+    // Far from the camera a character is a few pixels of suit colour, and the rig behind
+    // those pixels is thousands of triangles. This capsule stands in for it out there; the
+    // rig, helmet, face and the rest are only written for characters near enough to read.
+    const farGeo = new THREE.CapsuleGeometry(0.44, 1.25, 2, 6)
+    farGeo.translate(0, 1.1, 0)
+    parts.far = this._mesh(farGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8, metalness: 0.02 }), capacity, true)
 
     // The hammer, held in the right hand while a thread is running. Wood and steel rather
     // than suit white, so it reads as a tool at the distance the colony is watched from.
@@ -261,6 +269,16 @@ export class Astronauts {
    * nothing between them — which is fine, because no agent exists until the first roster
    * arrives, and that comes after.
    */
+  /**
+   * Where the camera is and how many pixels a metre covers at one metre, so _writeMatrices can
+   * tell a character that is 300 px tall from one that is 4 px tall and draw accordingly.
+   */
+  setLod(cameraPos, tanHalfFov, screenHeight) {
+    if (!this._lod) this._lod = { pos: new THREE.Vector3(), k: 400 }
+    this._lod.pos.copy(cameraPos)
+    this._lod.k = screenHeight / (2 * Math.max(0.05, tanHalfFov))
+  }
+
   setRig(rig) {
     if (!rig || this.rig === rig) return
     this.rig = rig
@@ -1219,7 +1237,9 @@ export class Astronauts {
   // ── writing the instance buffers ────────────────────────────────────────────────────
 
   _writeMatrices(elapsed, anim) {
-    const { helmet, visor, pack, antenna, tip, lamp, face, hammer } = this.parts
+    const { helmet, visor, pack, antenna, tip, lamp, face, hammer, far } = this.parts
+    const lod = this._lod
+    let farCount = 0
     const rig = this.rig
     const crew = this.crew
     const root = this._m
@@ -1250,6 +1270,18 @@ export class Astronauts {
       v.set(agent.pos.x, agent.pos.y, agent.pos.z)
       root.compose(v, q, one.setScalar(s * CREW_SCALE))
       one.setScalar(1)
+
+      // a few pixels tall: the capsule, and none of the rest
+      if (lod && far) {
+        const d = Math.hypot(agent.pos.x - lod.pos.x, agent.pos.y - lod.pos.y, agent.pos.z - lod.pos.z)
+        if (d > 1 && (1.9 * lod.k) / d < FAR_PX) {
+          far.setMatrixAt(farCount, root)
+          far.setColorAt(farCount, this._color.setHex(agent.suit))
+          farCount++
+          agent.index = -1
+          continue
+        }
+      }
 
       if (crew) {
         crew.setMatrixAt(i, root)
@@ -1315,9 +1347,9 @@ export class Astronauts {
 
     const n = i
     // The glowing parts pulse every frame; the rest only re-upload when something moved slot.
-    const animated = new Set(['tip', 'lamp'])
+    const animated = new Set(['tip', 'lamp', 'far'])
     for (const [name, mesh] of Object.entries(this.parts)) {
-      mesh.count = name === 'hammer' ? hands : name.startsWith('hat_') ? hats[name.slice(4)] : n
+      mesh.count = name === 'far' ? farCount : name === 'hammer' ? hands : name.startsWith('hat_') ? hats[name.slice(4)] : n
       mesh.instanceMatrix.needsUpdate = true
       if (mesh.instanceColor && (staticDirty || animated.has(name))) mesh.instanceColor.needsUpdate = true
     }

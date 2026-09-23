@@ -1630,6 +1630,7 @@ engine.add({
     mark.userData.tick(dt)
     people.update(dt, elapsed)
     if (astronauts.group.visible) {
+      astronauts.setLod?.(engine.camera.position, Math.tan(THREE.MathUtils.degToRad(engine.camera.fov / 2)), engine.canvas.clientHeight || innerHeight)
       astronauts.update(dt, elapsed)
       astronauts.updateRings?.(elapsed)
       wander(elapsed)
