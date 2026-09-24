@@ -1,3 +1,5 @@
+> **ARCHIVED 2026-09-24.** This code moved to [bhodgs01/campus](https://github.com/bhodgs01/campus) at `apps/unlimited`, the monorepo shared by Unlimited Campus, the School of Brain and the Bot Farm. Nothing here is maintained; do not push.
+
 # Unlimited Campus
 
 A walkable 3D and VR campus for Unlimited Awesome's **Six Castles of Human Flourishing**,
