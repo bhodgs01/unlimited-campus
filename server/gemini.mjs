@@ -5,7 +5,8 @@
  * same pass-through lives in the campus server: the browser never holds the Gemini key, it sends
  * the signed-in user's Auth0 ID token, and this forwards the call to Google with the key attached.
  *
- * Env: GEMINI_API_KEY (no VITE_ prefix, it must never reach a bundle), AUTH0_DOMAIN,
+ * Env: GEMINI_API_KEY (no VITE_ prefix, it must never reach a bundle), OIDC_ISSUER + OIDC_CLIENT_ID
+ * (authentik), or the older AUTH0_DOMAIN,
  * AUTH0_CLIENT_ID, optional AUTH0_AUDIENCE. Missing key = 503, so a gap reads as a deployment
  * problem rather than a Google outage.
  */
@@ -13,18 +14,32 @@ import { createRemoteJWKSet, jwtVerify } from 'jose'
 
 const UPSTREAM = 'https://generativelanguage.googleapis.com'
 const KEY = process.env.GEMINI_API_KEY || ''
+// Any OpenID Connect issuer (authentik on this host): OIDC_ISSUER + OIDC_CLIENT_ID, keys found
+// through the issuer's discovery document. Falls back to the Auth0 settings the Vercel build used.
+const OIDC_ISSUER = (process.env.OIDC_ISSUER || '').replace(/\/?$/, '/')
 const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN || ''
-const ISSUER = AUTH0_DOMAIN ? `https://${AUTH0_DOMAIN}/` : ''
-const AUDIENCES = [process.env.AUTH0_CLIENT_ID, process.env.AUTH0_AUDIENCE].filter(Boolean)
-const jwks = ISSUER ? createRemoteJWKSet(new URL(`${ISSUER}.well-known/jwks.json`)) : null
+const ISSUER = process.env.OIDC_ISSUER ? OIDC_ISSUER : AUTH0_DOMAIN ? `https://${AUTH0_DOMAIN}/` : ''
+const AUDIENCES = [process.env.OIDC_CLIENT_ID, process.env.AUTH0_CLIENT_ID, process.env.AUTH0_AUDIENCE].filter(Boolean)
+let jwks = null
+async function keys() {
+  if (jwks || !ISSUER) return jwks
+  let uri = `${ISSUER}.well-known/jwks.json`
+  if (process.env.OIDC_ISSUER) {
+    const res = await fetch(`${ISSUER}.well-known/openid-configuration`, { signal: AbortSignal.timeout(8000) })
+    if (!res.ok) throw new Error(`discovery ${res.status}`)
+    uri = (await res.json()).jwks_uri
+  }
+  jwks = createRemoteJWKSet(new URL(uri))
+  return jwks
+}
 
-export const geminiEnabled = () => Boolean(KEY && jwks)
+export const geminiEnabled = () => Boolean(KEY && ISSUER)
 
 async function requireUser(req) {
   const header = String(req.headers.authorization || '')
   const token = header.startsWith('Bearer ') ? header.slice(7).trim() : ''
   if (!token) throw new Error('missing bearer token')
-  const { payload } = await jwtVerify(token, jwks, { issuer: ISSUER, ...(AUDIENCES.length ? { audience: AUDIENCES } : {}) })
+  const { payload } = await jwtVerify(token, await keys(), { issuer: ISSUER, ...(AUDIENCES.length ? { audience: AUDIENCES } : {}) })
   if (!payload.sub) throw new Error('token has no subject')
   return payload.sub
 }
