@@ -7,7 +7,8 @@ import { needsAuth, hasValidAuth, checkPassword, makeSetCookie, loginPage, authE
 import { thread, send, markRead, unreadFor, chatReadonly } from './chat.mjs'
 import { createTicket, myTickets, ticketsEnabled } from './tickets.mjs'
 import { pushEnabled, vapidPublicKey, subscribe, unsubscribe, notify, deviceCount } from './push.mjs'
-import { handleGemini } from './gemini.mjs'
+import { handleGemini, handleGeminiUpgrade } from './gemini.mjs'
+import { quotes } from './quotes.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const DIST = path.join(here, '..', 'dist')
@@ -257,6 +258,12 @@ const server = http.createServer(async (req, res) => {
   // ── the course media, streamed from the NAS ─────────────────────────────────────────
   // Videos are 30 to 150 MB, so this streams with Range support rather than reading a file
   // into memory: without 206 replies a browser cannot seek and a headset stalls.
+  // the dashboard's header quotes, from UA's own sheet (cached an hour)
+  if (url.pathname === '/api/quotes') {
+    json(200, await quotes())
+    return
+  }
+
   // the 2D dashboard's Gemini calls: the key stays here, the browser sends its Auth0 token
   if (url.pathname.startsWith('/api/gemini/')) {
     await handleGemini(req, res, url)
@@ -334,6 +341,14 @@ const server = http.createServer(async (req, res) => {
   } catch {
     res.writeHead(404, { 'Content-Type': 'text/plain' }).end('Not found')
   }
+})
+
+// WebSockets: only Gemini Live (the dashboard's voice mode), behind the same site gate
+server.on('upgrade', (req, socket, head) => {
+  const url = new URL(req.url, 'http://localhost')
+  if (!url.pathname.startsWith('/api/gemini/ws/')) return socket.destroy()
+  if (needsAuth(req.headers.host) && !hasValidAuth(req)) return socket.end('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n')
+  handleGeminiUpgrade(req, socket, head).catch(() => socket.destroy())
 })
 
 server.listen(PORT, HOST, () => {

@@ -10,6 +10,7 @@
  * AUTH0_CLIENT_ID, optional AUTH0_AUDIENCE. Missing key = 503, so a gap reads as a deployment
  * problem rather than a Google outage.
  */
+import tls from 'node:tls'
 import { createRemoteJWKSet, jwtVerify } from 'jose'
 
 const UPSTREAM = 'https://generativelanguage.googleapis.com'
@@ -37,7 +38,10 @@ export const geminiEnabled = () => Boolean(KEY && ISSUER)
 
 async function requireUser(req) {
   const header = String(req.headers.authorization || '')
-  const token = header.startsWith('Bearer ') ? header.slice(7).trim() : ''
+  return verifyToken(header.startsWith('Bearer ') ? header.slice(7).trim() : '')
+}
+
+async function verifyToken(token) {
   if (!token) throw new Error('missing bearer token')
   const { payload } = await jwtVerify(token, await keys(), { issuer: ISSUER, ...(AUDIENCES.length ? { audience: AUDIENCES } : {}) })
   if (!payload.sub) throw new Error('token has no subject')
@@ -101,4 +105,43 @@ export async function handleGemini(req, res, url) {
     /* client hung up mid-stream */
   }
   res.end()
+}
+
+/**
+ * The dashboard's voice mode (Gemini Live) is a WebSocket. A browser cannot add headers to one, so
+ * the signed-in user's token arrives as the socket's ?key= and is swapped for the real key here.
+ * After the check the socket is spliced straight through to Google: the upgrade handshake is
+ * forwarded as-is, so Google's 101 (and its Sec-WebSocket-Accept) goes back to the browser.
+ */
+const CRLF = '\r\n'
+export async function handleGeminiUpgrade(req, socket, head) {
+  const url = new URL(req.url, 'http://localhost')
+  const refuse = (code, text) => socket.end(`HTTP/1.1 ${code} ${text}${CRLF}Connection: close${CRLF}${CRLF}`)
+  if (!geminiEnabled()) return refuse(503, 'Service Unavailable')
+  try {
+    await verifyToken(url.searchParams.get('key') || url.searchParams.get('access_token') || '')
+  } catch {
+    return refuse(401, 'Unauthorized')
+  }
+  const params = new URLSearchParams(url.search)
+  params.delete('access_token')
+  params.set('key', KEY)
+  const path = `${url.pathname.slice('/api/gemini'.length)}?${params}`
+  const pass = ['sec-websocket-key', 'sec-websocket-version', 'sec-websocket-protocol', 'sec-websocket-extensions']
+  const lines = [`GET ${path} HTTP/1.1`, 'Host: generativelanguage.googleapis.com', 'Upgrade: websocket', 'Connection: Upgrade']
+  for (const h of pass) if (req.headers[h]) lines.push(`${h}: ${req.headers[h]}`)
+  const up = tls.connect({ host: 'generativelanguage.googleapis.com', port: 443, servername: 'generativelanguage.googleapis.com' }, () => {
+    up.write(lines.join(CRLF) + CRLF + CRLF)
+    if (head?.length) up.write(head)
+    up.pipe(socket)
+    socket.pipe(up)
+  })
+  const kill = () => {
+    up.destroy()
+    socket.destroy()
+  }
+  up.on('error', kill)
+  socket.on('error', kill)
+  up.on('close', () => socket.destroy())
+  socket.on('close', () => up.destroy())
 }
