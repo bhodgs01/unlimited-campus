@@ -192,7 +192,9 @@ check(!s.riding, 'home: off the ride')
 check(!s.earth && s.sea !== false && s.stars < 0.95, 'the sky and the sea are put back')
 const back = await page.evaluate(() => { const C = window.__campus; return { near: C.engine.scene.fog.near, far: C.engine.scene.fog.far, camNear: C.engine.camera.near, camFar: C.engine.camera.far, was: C.fogAt } })
 console.log('view back', JSON.stringify(back))
-check(back.near === back.was.near && back.far === back.was.far && back.camFar === back.was.camFar && back.camNear === back.was.camNear, 'the fog and the clip planes are exactly as they were')
+// the near plane is the campus's own (it follows the camera's height), so it only has to be back
+// in the campus's hands: between its 0.2 and 8 m, not the rocket's 1.5
+check(back.near === back.was.near && back.far === back.was.far && back.camFar === back.was.camFar && back.camNear >= 0.2 && back.camNear <= 8, 'the fog and the far plane are exactly as they were, and the near plane is back with the campus')
 check(s.phase === 'rollout', 'the next rocket is being rolled out')
 const again = await page.evaluate(() => {
   const C = window.__campus

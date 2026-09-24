@@ -180,7 +180,9 @@ const walk = new WalkMode({ engine, rig, campus, nav, hud: null })
 engine.add({
   update() {
     const cam = engine.camera
-    if (engine.renderer.xr?.isPresenting) return
+    // the rocket owns the clip planes while it flies (space needs them far out), and hands
+    // them back on landing
+    if (engine.renderer.xr?.isPresenting || flying) return
     const want = walk.active ? 0.2 : Math.min(8, Math.max(0.5, cam.position.y * 0.04))
     if (Math.abs(want - cam.near) / cam.near > 0.1) {
       cam.near = want
