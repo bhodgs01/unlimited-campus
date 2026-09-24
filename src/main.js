@@ -19,6 +19,7 @@ import { mountBubble } from './ui/bubble.js'
 import { installVr } from './vr.js'
 import { People } from './agents/people.js'
 import { FAMOUS } from './data/famous.js'
+import { MENTORS } from './data/mentors.js'
 import { chipFace } from './agents/family.js'
 import { PEOPLE } from './agents/family.js'
 import { Life } from './life/index.js'
@@ -1456,6 +1457,11 @@ function findPerson(id) {
   hud.setActivePerson(id)
   const info = PEOPLE[id]
   p.g.userData.setExpression?.('happy')
+  if (info.mentor) {
+    // real, living people: say who they are, never put words in their mouths
+    hud.showCard({ kicker: 'Unlimited Awesome mentor', image: chipFace(id), square: true, title: info.name, text: `${info.expertise}. Find the mentors around the Hall of Mentors.`, accent: BRAND.purple })
+    return
+  }
   if (info.famous) {
     hud.showCard({ kicker: 'Famous teacher', image: chipFace(id), square: true, title: info.name, text: `${info.known}. ${info.edu}`, accent: BRAND.lime, actions: [{ label: `Talk to ${info.name.split(' ')[0]}`, fn: () => startChat(id), primary: true }] })
     return
@@ -1482,17 +1488,22 @@ hud.setPeopleGroup(
   FAMOUS.map((f) => ({ id: f.id, name: f.name, known: f.known, face: chipFace(f.id) })),
   (id) => findPerson(id)
 )
+hud.setPeopleGroup(
+  'Mentors',
+  MENTORS.map((m) => ({ id: m.id, name: m.name, known: m.expertise, face: chipFace(m.id) })),
+  (id) => findPerson(id)
+)
 /** Where each famous teacher lives: their landmark, nudged onto open ground nearby. */
 /** Where each famous teacher lives: the open walking spots nearest their landmark, so they
  * stand on paths and lawns people use, never inside a grove. */
 const allSpots = Object.values(campus.spots).flat()
 const homesTaken = []
-function famousHome(f) {
+function famousHome(f, reach = 45) {
   const lm = campus.landmarks.find((l) => l.id === f.home)
   if (!lm) return null
   const near = allSpots
     .map((sp) => ({ ...sp, d: Math.hypot(sp.x - lm.x, sp.z - lm.z) }))
-    .filter((sp) => sp.d < 45 && !nav.isBlocked(sp.x, sp.z))
+    .filter((sp) => sp.d < reach && !nav.isBlocked(sp.x, sp.z))
     .sort((a, b) => a.d - b.d)
   const home = near.find((sp) => !homesTaken.some((h) => Math.hypot(h.x - sp.x, h.z - sp.z) < 6)) || near[0]
   if (!home) return null
@@ -1889,6 +1900,12 @@ async function boot() {
       const home = famousHome(f)
       if (home) people.add(f.id, home, { home, radius: 16, spots: home.spots })
       else console.warn('[campus] no home for', f.id, f.home)
+    }
+    // the mentors gather round the Hall of Mentors (Alan is already walking about as himself)
+    for (const m of MENTORS) {
+      if (!PEOPLE[m.id]?.mentor) continue
+      const home = famousHome({ home: 'mentorshall' }, 80)
+      if (home) people.add(m.id, home, { home, radius: 14, spots: home.spots })
     }
   } catch (err) {
     console.warn('people failed to load', err)

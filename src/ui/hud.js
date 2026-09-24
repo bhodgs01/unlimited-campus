@@ -307,12 +307,23 @@ export class Hud {
       wrap.appendChild(b)
     }
   }
-  /** One chip for a whole group (the famous teachers) that opens a dropdown of face chips. */
+  /**
+   * One chip for a whole group (the famous teachers, the mentors) that opens a dropdown of face
+   * chips. Each group gets its own dropdown; opening one closes the others.
+   */
   setPeopleGroup(label, list, onClick) {
     const wrap = this.$('.uc-people')
-    const menu = this.$('.uc-famous')
+    let menu = this.$('.uc-famous')
+    if (menu.dataset.group) {
+      const next = document.createElement('div')
+      next.className = 'panel uc-famous'
+      next.hidden = true
+      menu.after(next)
+      menu = next
+    }
+    menu.dataset.group = label
     const b = document.createElement('button')
-    b.dataset.group = 'famous'
+    b.dataset.group = label
     b.title = `Find one of the ${list.length} ${label.toLowerCase()}`
     b.innerHTML = `<span class="facestack">${list.slice(0, 3).map((p) => `<img src="${p.face}" alt="">`).join('')}</span>${label}<span class="caret">▼</span>`
     const close = () => {
@@ -321,8 +332,11 @@ export class Hud {
     }
     b.addEventListener('click', (e) => {
       e.stopPropagation()
-      menu.hidden = !menu.hidden
-      b.classList.toggle('open', !menu.hidden)
+      const opening = menu.hidden
+      for (const other of this.el.querySelectorAll('.uc-famous')) other.hidden = true
+      for (const other of wrap.querySelectorAll('[data-group]')) other.classList.remove('open')
+      menu.hidden = !opening
+      b.classList.toggle('open', opening)
     })
     wrap.appendChild(b)
     menu.innerHTML = `<div class="head">${label} on campus</div>`
@@ -340,14 +354,15 @@ export class Hud {
     }
     menu.addEventListener('click', (e) => e.stopPropagation())
     document.addEventListener('click', close)
-    this._groupIds = new Set(list.map((p) => p.id))
+    this._groups = this._groups || new Map()
+    this._groups.set(label, new Set(list.map((p) => p.id)))
   }
   setActivePerson(id) {
     for (const b of this.$('.uc-people').children) {
-      if (b.dataset.group) b.classList.toggle('active', Boolean(id && this._groupIds?.has(id)))
+      if (b.dataset.group) b.classList.toggle('active', Boolean(id && this._groups?.get(b.dataset.group)?.has(id)))
       else b.classList.toggle('active', b.dataset.person === id)
     }
-    for (const b of this.$('.uc-famous').children) if (b.dataset.person) b.classList.toggle('active', b.dataset.person === id)
+    for (const menu of this.el.querySelectorAll('.uc-famous')) for (const b of menu.children) if (b.dataset.person) b.classList.toggle('active', b.dataset.person === id)
   }
   setActiveChip(id) {
     for (const b of this.chips.children) b.classList.toggle('active', b.dataset.castle === id)

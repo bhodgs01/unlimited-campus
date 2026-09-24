@@ -5,6 +5,7 @@
  */
 import * as THREE from 'three'
 import { FAMOUS } from '../data/famous.js'
+import { MENTORS } from '../data/mentors.js'
 
 const EXPRESSIONS = ['neutral', 'happy', 'surprised', 'annoyed', 'sleepy']
 
@@ -16,7 +17,10 @@ export const PEOPLE = {
 export const FAMILY_IDS = Object.keys(PEOPLE)
 for (const f of FAMOUS) PEOPLE[f.id] = { ...f, role: f.known, intro: f.edu, famous: true, ext: 'webp', height: 0.9, center: 1.24 }
 export const FAMOUS_IDS = FAMOUS.map((f) => f.id)
-export const chipFace = (id) => `${import.meta.env.BASE_URL}family/${id}-${PEOPLE[id]?.famous ? 'chip.webp' : 'neutral.png'}`
+// UA's mentors, built like the famous teachers from their own portraits (Alan is already here)
+for (const m of MENTORS) if (!PEOPLE[m.id]) PEOPLE[m.id] = { ...m, role: 'Mentor', intro: m.expertise, mentor: true, ext: 'webp', height: 0.9, center: 1.24 }
+export const MENTOR_IDS = MENTORS.map((m) => m.id).filter((id) => PEOPLE[id]?.mentor)
+export const chipFace = (id) => `${import.meta.env.BASE_URL}family/${id}-${PEOPLE[id]?.famous || PEOPLE[id]?.mentor ? 'chip.webp' : 'neutral.png'}`
 
 const assetBase = `${import.meta.env.BASE_URL}family/`
 const cache = new Map()
