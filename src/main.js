@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import './ui/styles.css'
 import { DEFAULT_PRESET, Settings, hasStoredSettings } from './core/settings.js'
-import { Engine } from './core/engine.js'
+import { Engine } from './engine/index.js'
 import { CameraRig } from './core/camera.js'
 import { Sky } from './world/sky.js'
 import { Astronauts } from './agents/astronauts.js'
